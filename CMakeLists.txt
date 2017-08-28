@@ -6,7 +6,7 @@ Project(mkxp)
 option(SHARED_FLUID "Dynamically link fluidsynth at build time" OFF)
 option(WORKDIR_CURRENT "Keep current directory on startup" OFF)
 option(FORCE32 "Force 32bit compile on 64bit OS" OFF)
-set(BINDING "MRI" CACHE STRING "The Binding Type (MRI, MRUBY, NULL)")
+set(BINDING "MRI" CACHE STRING "The Binding Type (MRI, MRUBY, FFI, NULL)")
 set(EXTERNAL_LIB_PATH "" CACHE PATH "External precompiled lib prefix")
 
 ## Misc setup ##
@@ -369,6 +369,25 @@ elseif(BINDING STREQUAL "NULL")
 	set(BINDING_SOURCE
 		binding-null/binding-null.cpp
 	)
+elseif(BINDING STREQUAL "FFI")
+	list(APPEND DEFINES
+		BINDING_FFI
+	)
+
+	set(BINDING_HEADERS
+		binding-ffi/binding-util.h
+	)
+
+	set(BINDING_SOURCE
+		binding-ffi/binding-ffi.cpp
+		binding-ffi/bitmap-binding.cpp
+		binding-ffi/disposable-binding.cpp
+		binding-ffi/filesystem-binding.cpp
+		binding-ffi/font-binding.cpp
+	)
+	
+	ProcessWithXXD(BINDING_SOURCE binding-ffi/binding-ffi.rb ${CMAKE_CURRENT_BINARY_DIR})
+	ProcessWithXXD(BINDING_SOURCE binding-ffi/run-mkxp.rb ${CMAKE_CURRENT_BINARY_DIR})
 else()
 	message(FATAL_ERROR "Must choose a valid binding type.  MRI, MRUBY, or NULL")
 endif()
