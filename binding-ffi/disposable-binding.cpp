@@ -8,7 +8,7 @@ extern "C" {
 		}
 	}
 	
-	int mkxpDisposableIsDisposed(void* obj) {
+	int mkxpDisposableDisposed(void* obj) {
 		if(obj)
 			return static_cast<Disposable*>(obj)->isDisposed();
 		

@@ -379,15 +379,23 @@ elseif(BINDING STREQUAL "FFI")
 	)
 
 	set(BINDING_SOURCE
+		binding-ffi/audio-binding.cpp
 		binding-ffi/binding-ffi.cpp
 		binding-ffi/bitmap-binding.cpp
+		binding-ffi/color-binding.cpp
 		binding-ffi/disposable-binding.cpp
 		binding-ffi/filesystem-binding.cpp
 		binding-ffi/font-binding.cpp
+		binding-ffi/graphics-binding.cpp
+		binding-ffi/input-binding.cpp
+		binding-ffi/plane-binding.cpp
+		binding-ffi/sprite-binding.cpp
+		binding-ffi/table-binding.cpp
+		binding-ffi/tilemap-binding.cpp
+		binding-ffi/tone-binding.cpp
+		binding-ffi/viewport-binding.cpp
+		binding-ffi/window-binding.cpp
 	)
-	
-	ProcessWithXXD(BINDING_SOURCE binding-ffi/binding-ffi.rb ${CMAKE_CURRENT_BINARY_DIR})
-	ProcessWithXXD(BINDING_SOURCE binding-ffi/run-mkxp.rb ${CMAKE_CURRENT_BINARY_DIR})
 else()
 	message(FATAL_ERROR "Must choose a valid binding type.  MRI, MRUBY, or NULL")
 endif()

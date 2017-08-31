@@ -5,9 +5,7 @@
 #include <cstdlib>
 
 extern "C" {
-	void mkxpBitmapDelete(void* ptr) {
-		delete reinterpret_cast<Bitmap*>(ptr);
-	}
+	BINDING_DESTRUCTOR(Bitmap)
 	
 	void* mkxpBitmapInitializeFilename(const char* filename) {
 		return new Bitmap(filename);
@@ -26,41 +24,39 @@ extern "C" {
 	}
 	
 	FFIRect mkxpBitmapRect(void* ptr) {
-		IntRect r = reinterpret_cast<Bitmap*>(ptr)->rect();
-		return {r.x, r.y, r.w, r.h};
+		return reinterpret_cast<Bitmap*>(ptr)->rect();
 	}
 	
-	void mkxpBitmapBlt(void* ptr, int x, int y, void* src_bitmap, int src_x, int src_y, int src_width, int src_height, int opacity) {
-		return reinterpret_cast<Bitmap*>(ptr)->blt(x, y, *reinterpret_cast<Bitmap*>(src_bitmap), IntRect(src_x, src_y, src_width, src_height), opacity);
+	void mkxpBitmapBlt(void* ptr, int x, int y, Bitmap* src_bitmap, FFIRect src_rect, int opacity) {
+		return reinterpret_cast<Bitmap*>(ptr)->blt(x, y, *src_bitmap, src_rect, opacity);
 	}
 	
-	void mkxpBitmapStretchBlt(void* ptr, int dst_x, int dst_y, int dst_width, int dst_height, void* src_bitmap, int src_x, int src_y, int src_width, int src_height, int opacity) {
-		return reinterpret_cast<Bitmap*>(ptr)->stretchBlt(IntRect(dst_x, dst_y, dst_width, dst_height), *reinterpret_cast<Bitmap*>(src_bitmap), IntRect(src_x, src_y, src_width, src_height), opacity);
+	void mkxpBitmapStretchBlt(void* ptr, FFIRect dest_rect, Bitmap* src_bitmap, FFIRect src_rect, int opacity) {
+		return reinterpret_cast<Bitmap*>(ptr)->stretchBlt(dest_rect, *src_bitmap, src_rect, opacity);
 	}
 	
-	void mkxpBitmapFillRect(void* ptr, int x, int y, int width, int height, int r, int g, int b, int a) {
-		return reinterpret_cast<Bitmap*>(ptr)->fillRect(x, y, width, height, Vec4(r, g, b, a));
+	void mkxpBitmapFillRect(void* ptr, FFIRect rect, Color* c) {
+		return reinterpret_cast<Bitmap*>(ptr)->fillRect(rect, Vec4(c->red, c->green, c->blue, c->alpha));
 	}
 	
-	void mkxpBitmapGradientFillRect(void* ptr, int x, int y, int width, int height, int r1, int g1, int b1, int a1, int r2, int g2, int b2, int a2, int vertical) {
-		return reinterpret_cast<Bitmap*>(ptr)->gradientFillRect(x, y, width, height, Vec4(r1, g1, b1, a1), Vec4(r2, g2, b2, a2), vertical);
+	void mkxpBitmapGradientFillRect(void* ptr, FFIRect rect, Color* c1, Color* c2, int vertical) {
+		return reinterpret_cast<Bitmap*>(ptr)->gradientFillRect(rect, Vec4(c1->red, c1->green, c1->blue, c1->alpha), Vec4(c2->red, c2->green, c2->blue, c2->alpha), vertical);
 	}
 	
 	void mkxpBitmapClear(void* ptr) {
 		return reinterpret_cast<Bitmap*>(ptr)->clear();
 	}
 	
-	void mkxpBitmapClearRect(void* ptr, int x, int y, int width, int height) {
-		return reinterpret_cast<Bitmap*>(ptr)->clearRect(x, y, width, height);
+	void mkxpBitmapClearRect(void* ptr, FFIRect r) {
+		return reinterpret_cast<Bitmap*>(ptr)->clearRect(r);
 	}
 	
-	FFIColor mkxpBitmapGetPixel(void* ptr, int x, int y) {
-		Color c = reinterpret_cast<Bitmap*>(ptr)->getPixel(x, y);
-		return {static_cast<int>(c.getRed()), static_cast<int>(c.getGreen()), static_cast<int>(c.getBlue()), static_cast<int>(c.getAlpha())};
+	void mkxpBitmapGetPixel(void* ptr, int x, int y, Color* out) {
+		*out = reinterpret_cast<Bitmap*>(ptr)->getPixel(x, y);
 	}
 	
-	void mkxpBitmapSetPixel(void* ptr, int x, int y, int r, int g, int b, int a) {
-		return reinterpret_cast<Bitmap*>(ptr)->setPixel(x, y, Vec4(r, g, b, a));
+	void mkxpBitmapSetPixel(void* ptr, int x, int y, Color* in) {
+		return reinterpret_cast<Bitmap*>(ptr)->setPixel(x, y, *in);
 	}
 	
 	void mkxpBitmapHueChange(void* ptr, int hue) {
@@ -75,20 +71,13 @@ extern "C" {
 		return reinterpret_cast<Bitmap*>(ptr)->radialBlur(angle, divisions);
 	}
 	
-	void mkxpBitmapDrawText(void* ptr, int x, int y, int width, int height, const char* str, int align) {
-		return reinterpret_cast<Bitmap*>(ptr)->drawText(x, y, width, height, str, align);
+	void mkxpBitmapDrawText(void* ptr, FFIRect r, const char* str, int align) {
+		return reinterpret_cast<Bitmap*>(ptr)->drawText(r, str, align);
 	}
 	
 	FFIRect mkxpBitmapTextSize(void* ptr, const char* str) {
-		IntRect r = reinterpret_cast<Bitmap*>(ptr)->textSize(str);
-		return {r.x, r.y, r.w, r.h};
+		return reinterpret_cast<Bitmap*>(ptr)->textSize(str);
 	}
 	
-	void* mkxpBitmapGetFont(void* ptr) {
-		return &reinterpret_cast<Bitmap*>(ptr)->getFont();
-	}
-	
-	void mkxpBitmapSetFont(void* ptr, void* font) {
-		return reinterpret_cast<Bitmap*>(ptr)->setFont(reinterpret_cast<FFIFont*>(font)->font);
-	}
+	BINDING_PROPERTY_REF(Bitmap, Font, Font)
 }

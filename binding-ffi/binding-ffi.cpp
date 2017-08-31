@@ -101,7 +101,8 @@ extern "C" {
 
 
     void* mkxpStringVectorHelperNew() {
-        return new std::vector<std::string>();
+        std::vector<std::string>* p = new std::vector<std::string>();
+        return p;
     }
 
     void mkxpStringVectorHelperPushBack(void* ptr, const char* str) {
@@ -114,6 +115,14 @@ extern "C" {
 
     const char* mkxpStringVectorHelperAt(void* ptr, std::size_t index) {
         return reinterpret_cast<std::vector<std::string>*>(ptr)->at(index).c_str();
+    }
+    
+    int mkxpSerializableSerialSize(Serializable* ptr) {
+        return ptr->serialSize();
+    }
+    
+    void mkxpSerializableSerialize(Serializable* ptr, char* buf) {
+        ptr->serialize(buf);
     }
 }
 
@@ -259,6 +268,8 @@ static void showExc(VALUE exc, const BacktraceData& btData) {
     showMsg(ms);
 }
 
+std::unordered_map<std::string, Input::ButtonCode> buttonMap;
+
 static void ffiBindingExecute() {
     /* Normally only a ruby executable would do a sysinit,
      * but not doing it will lead to crashes due to closed
@@ -271,6 +282,30 @@ static void ffiBindingExecute() {
     ruby_init_loadpath();
     rb_enc_set_default_external(rb_enc_from_encoding(rb_utf8_encoding()));
 
+    buttonMap["DOWN"] = Input::ButtonCode::Down;
+    buttonMap["UP"] = Input::ButtonCode::Up;
+    buttonMap["LEFT"] = Input::ButtonCode::Left;
+    buttonMap["RIGHT"] = Input::ButtonCode::Right;
+    
+    buttonMap["A"] = Input::ButtonCode::A;
+    buttonMap["B"] = Input::ButtonCode::B;
+    buttonMap["C"] = Input::ButtonCode::C;
+    buttonMap["X"] = Input::ButtonCode::X;
+    buttonMap["Y"] = Input::ButtonCode::Y;
+    buttonMap["Z"] = Input::ButtonCode::Z;
+    buttonMap["L"] = Input::ButtonCode::L;
+    buttonMap["R"] = Input::ButtonCode::R;
+    
+    buttonMap["SHIFT"] = Input::ButtonCode::Shift;
+    buttonMap["CTRL"] = Input::ButtonCode::Ctrl;
+    buttonMap["ALT"] = Input::ButtonCode::Alt;
+    
+    buttonMap["F5"] = Input::ButtonCode::F5;
+    buttonMap["F6"] = Input::ButtonCode::F6;
+    buttonMap["F7"] = Input::ButtonCode::F7;
+    buttonMap["F8"] = Input::ButtonCode::F8;
+    buttonMap["F9"] = Input::ButtonCode::F9;
+    
     Config& conf = shState->rtData().config;
 
     RbData rbData;
@@ -291,8 +326,9 @@ static void ffiBindingExecute() {
 
     int state;
 
-    rb_eval_string_protect(reinterpret_cast<const char*>(binding_ffi_binding_ffi_rb), &state);
-
+    rb_eval_string_protect(reinterpret_cast<const char*>(binding_ffi_rb), &state);
+//     std::cout << "" << std::endl;
+    
     if(state) {
         VALUE exc = rb_errinfo();
 
@@ -301,9 +337,6 @@ static void ffiBindingExecute() {
 
         return;
     }
-
-    Font::setDefaultColor(FFIFont::default_color);
-    Font::setDefaultOutColor(FFIFont::default_outcolor);
 
     if(rgssVer == 1)
         rb_eval_string_protect(module_rpg1, &state);
@@ -355,7 +388,7 @@ static void ffiBindingExecute() {
         return;
     }
 
-    rb_eval_string_protect(reinterpret_cast<const char*>(binding_ffi_run_mkxp_rb), &state);
+    rb_eval_string_protect(reinterpret_cast<const char*>(run_mkxp_rb), &state);
 
     if(state) {
         VALUE exc = rb_errinfo();
