@@ -134,11 +134,18 @@ class FFICModule
   def module_body
   end
   
+  def marshal_load
+    FFICStaticMethod.new(moduleContext, namespaceName, klass, :Deserialize, :_load, [:pointer, :int], :pointer)
+  end
+  
   def constructor(ctrtypes)
     FFICMethod.new(moduleContext, namespaceName, klass, :New, :initialize, ctrtypes, :pointer)
   end
   def ruby_constructor
     FFICMethod.new(moduleContext, namespaceName, klass, :New, :initialize, [], :pointer)
+  end
+  def copy_constructor
+    FFICMethod.new(moduleContext, namespaceName, klass, :NewCopy, :initialize_copy, [:pointer], :pointer)
   end
   
   def destructor
@@ -171,10 +178,17 @@ class FFICModule
 end
 
 class FFICModuleC < FFICModule
+  def marshal_load
+      super.bindC
+  end
+  
   def constructor(ctrtypes)
     super.bindC
   end
   def ruby_constructor
+  end
+  def copy_constructor
+      super.bindC
   end
   
   def destructor
@@ -220,23 +234,63 @@ class FFICModuleR < FFICModule
     end
   end
   
+  def marshal_load
+      me = self
+      method = super
+      method.bindRuby do |str|
+        strptr = FFI::MemoryPointer.new(:char, str.length)
+        strptr.write_bytes(str)
+        
+        instance = allocate
+        instance.send(:ptr=, me.moduleContext.send(method.cName, strptr, str.length))
+        
+        instance
+      end
+  end
+  
+#   def constructor(ctrtypes)
+#     me = self
+#     if block_given?
+#       super.bindRuby do |*args|
+#         @ptr = FFI::AutoPointer.new(yield(*args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
+#       end
+#     else
+#       method = super
+#       method.bindRuby do |*args|
+#         @ptr = FFI::AutoPointer.new(moduleContext.send(method.cName, *args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
+#       end
+#     end
+#   end
+#   def ruby_constructor(&block)
+#     me = self
+#     super.bindRuby do |*args|
+#       @ptr = FFI::AutoPointer.new(yield(*args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
+#     end
+#   end
   def constructor(ctrtypes)
     me = self
     if block_given?
       super.bindRuby do |*args|
-        @ptr = FFI::AutoPointer.new(yield(*args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
+        @ptr = yield(*args)
       end
     else
       method = super
       method.bindRuby do |*args|
-        @ptr = FFI::AutoPointer.new(moduleContext.send(method.cName, *args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
+        @ptr = moduleContext.send(method.cName, *args)
       end
     end
   end
   def ruby_constructor(&block)
     me = self
     super.bindRuby do |*args|
-      @ptr = FFI::AutoPointer.new(yield(*args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
+      @ptr = yield(*args)
+    end
+  end
+  def copy_constructor
+    me = self
+    method = super
+    method.bindRuby do |cp|
+      @ptr = moduleContext.send(method.cName, cp.ptr)
     end
   end
   
@@ -455,19 +509,10 @@ module MkxpBinding
     end
   end
   
-  attach_function :mkxpColorDeserialize, [:pointer, :int], :pointer
   class_binding :Color, Serializable do
     ffi_visible
     
-    ruby_static_method :_load do |str|
-      strptr = FFI::MemoryPointer.new(:char, str.length)
-      strptr.write_bytes(str)
-      
-      instance = allocate
-      instance.send(:ptr=, FFI::AutoPointer.new(MkxpBinding::mkxpColorDeserialize(strptr, str.length), MkxpBinding.method(:mkxpColorDelete)))
-      
-      instance
-    end
+    marshal_load
     
     constructor [:float, :float, :float, :float] do |*args|
       if args.length == 3 or args.length == 4
@@ -491,7 +536,12 @@ module MkxpBinding
     property :float, :alpha
     
     ruby_method :set do |*args|
-      if args.length == 3 or args.length == 4
+      if args.length == 1
+        red = args[0].red
+        green = args[0].green
+        blue = args[0].blue
+        alpha = args[0].alpha
+      elsif args.length == 3 or args.length == 4
         red = args[0]
         green = args[1]
         blue = args[2]
@@ -505,95 +555,150 @@ module MkxpBinding
     end
   end
   
-  class FFIRect < FFI::Struct
-    layout   :x, :int,
-        :y, :int,
-        :width, :int,
-        :height, :int
-  end
-  class Rect
-    attr_accessor :intobj
-    private :intobj=
+#   class FFIRect < FFI::Struct
+#     layout   :x, :int,
+#         :y, :int,
+#         :width, :int,
+#         :height, :int
+#   end
+#   class Rect
+#     attr_accessor :intobj
+#     private :intobj=
+#     
+#     extend FFI::DataConverter
+#     
+#     native_type FFIRect.by_value
+#     
+#     def self.from_native(value, ctx)
+#       o = Rect.new
+#       o.send(:intobj=, value)
+#       o
+#     end
+#     
+#     def self.to_native(value, ctx)
+#       value.intobj
+#     end
+#     
+#     def initialize(ix = 0, iy = 0, iw = 0, ih = 0)
+#       @intobj = FFIRect.new
+#       set(ix, iy, iw, ih)
+#     end
+#     
+#     def inspect
+#       "{x: #{x}; y: #{y}; w: #{width}; h: #{height}}"
+#     end
+#     
+#     def set(*args)
+#       if args.length == 1
+#         x = args[0].x
+#         y = args[0].y
+#         width = args[0].width
+#         height = args[0].height
+#       elsif args.length == 4
+#         x = args[0]
+#         y = args[1]
+#         width = args[2]
+#         height = args[3]
+#       end
+#     end
+#     
+#     def empty
+#       set(0, 0, 0, 0)
+#     end
+#     
+#     def x
+#       intobj[:x]
+#     end
+#     def y
+#       intobj[:y]
+#     end
+#     def width
+#       intobj[:width]
+#     end
+#     def height
+#       intobj[:height]
+#     end
+#     def x= ix
+#       intobj[:x] = ix
+#     end
+#     def y= iy
+#       intobj[:y] = iy
+#     end
+#     def width= iw
+#       intobj[:width] = iw
+#     end
+#     def height= ih
+#       intobj[:height] = ih
+#     end
+#   end
+  
+  class_binding :Rect, Serializable do
+    ffi_visible
     
-    extend FFI::DataConverter
+    marshal_load
     
-    native_type FFIRect.by_value
-    
-    def self.from_native(value, ctx)
-      o = Rect.new
-      o.send(:intobj=, value)
-      o
+    constructor [:int, :int, :int, :int] do |*args|
+      if args.length == 1
+        r = args[0].red
+        g = args[0].green
+        b = args[0].blue
+        a = args[0].alpha
+      elsif args.length == 3 or args.length == 4
+        r = args[0]
+        g = args[1]
+        b = args[2]
+        a = (args.length == 4 ? args[3] : 255)
+      elsif args.length == 0
+        r = 0
+        g = 0
+        b = 0
+        a = 0
+      end
+      MkxpBinding::mkxpRectNew(r, g, b, a)
     end
+    destructor
     
-    def self.to_native(value, ctx)
-      value.intobj
-    end
+    property :int, :x
+    property :int, :y
+    property :int, :width
+    property :int, :height
     
-    def initialize(ix = 0, iy = 0, iw = 0, ih = 0)
-      @intobj = FFIRect.new
-      set(ix, iy, iw, ih)
-    end
-    
-    def set(*args)
+    ruby_method :set do |*args|
       if args.length == 1
         x = args[0].x
         y = args[0].y
         width = args[0].width
         height = args[0].height
-      elsif args.length == 4
+      elsif args.length == 3 or args.length == 4
         x = args[0]
         y = args[1]
         width = args[2]
-        height = args[3]
+        height = (args.length == 4 ? args[3] : 0)
+      elsif args.length == 0
+        x = 0
+        y = 0
+        width = 0
+        height = 0
       end
     end
     
-    def empty
-      set(0, 0, 0, 0)
-    end
-    
-    def x
-      intobj[:x]
-    end
-    def y
-      intobj[:y]
-    end
-    def width
-      intobj[:width]
-    end
-    def height
-      intobj[:height]
-    end
-    def x= ix
-      intobj[:x] = ix
-    end
-    def y= iy
-      intobj[:y] = iy
-    end
-    def width= iw
-      intobj[:width] = iw
-    end
-    def height= ih
-      intobj[:height] = ih
+    ruby_method :empty do
+        set
     end
   end
   
-  attach_function :mkxpToneDeserialize, [:pointer, :int], :pointer
   class_binding :Tone, Serializable do
     ffi_visible
     
-    ruby_static_method :_load do |str|
-      strptr = FFI::MemoryPointer.new(:char, str.length)
-      strptr.write_bytes(str)
-      
-      instance = allocate
-      instance.send(:ptr=, FFI::AutoPointer.new(MkxpBinding::mkxpToneDeserialize(strptr, str.length), MkxpBinding.method(:mkxpToneDelete)))
-      
-      instance
-    end
+    marshal_load
     
     constructor [:float, :float, :float, :float] do |*args|
-      if args.length == 3 or args.length == 4
+      if args.length == 1
+        r = args[0].red
+        g = args[0].green
+        b = args[0].blue
+        gr = args[0].gray
+      elsif args.length == 3 or args.length == 4
         r = args[0]
         g = args[1]
         b = args[2]
@@ -604,7 +709,7 @@ module MkxpBinding
         b = 0
         gr = 0
       end
-      MkxpBinding::mkxpColorNew(r, g, b, gr)
+      MkxpBinding::mkxpToneNew(r, g, b, gr)
     end
     destructor
     
@@ -614,7 +719,12 @@ module MkxpBinding
     property :float, :gray
     
     ruby_method :set do |*args|
-      if args.length == 3 or args.length == 4
+      if args.length == 1
+        red = args[0].red
+        green = args[0].green
+        blue = args[0].blue
+        gray = args[0].gray
+      elsif args.length == 3 or args.length == 4
         red = args[0]
         green = args[1]
         blue = args[2]
@@ -701,19 +811,10 @@ module MkxpBinding
   
   attach_function :mkxpTableGet, [:pointer, :int, :int, :int], :int
   attach_function :mkxpTableSet, [:pointer, :int, :int, :int, :int], :void
-  attach_function :mkxpTableDeserialize, [:pointer, :int], :pointer
   class_binding :Table, Serializable do
     ffi_visible
     
-    ruby_static_method :_load do |str|
-      strptr = FFI::MemoryPointer.new(:char, str.length)
-      strptr.write_bytes(str)
-      
-      instance = allocate
-      instance.send(:ptr=, FFI::AutoPointer.new(MkxpBinding::mkxpTableDeserialize(strptr, str.length), MkxpBinding.method(:mkxpTableDelete)))
-      
-      instance
-    end
+    marshal_load
     
     constructor [:int, :int, :int] do |*args|
       x = args[0]
@@ -772,7 +873,7 @@ module MkxpBinding
       
       def name= n
         @name = n
-        MkxpBinding::mkxpFontSetName(ptr, StringVector::to_native(n, nil))
+        MkxpBinding::mkxpFontSetName(ptr, n)
       end
       
       def self.default_name
@@ -787,8 +888,9 @@ module MkxpBinding
     
     constructor [StringVector, :int] do |*args|
       @name = args.length >= 1 ? args[0] : nil
-      MkxpBinding::mkxpFontNew(@name, args.length >= 2 ? args[1] : 0)
+      MkxpBinding::mkxpFontNew(@name, args.length == 2 ? args[1] : 0)
     end
+    copy_constructor
     destructor
     
     property :int, :size
@@ -827,7 +929,11 @@ module MkxpBinding
     
     method :int, :width, []
     method :int, :height, []
-    method Rect, :rect, []
+    method Rect, :rect, [] do
+      rp = MkxpBinding::mkxpBitmapRect()
+      rp.send(:ptr=, FFI::AutoPointer(rp.ptr, MkxpBinding.method(mkxpRectDelete)))
+      rp
+    end
     method :void, :blt, [:int, :int, :pointer, Rect, :int] do |x, y, src_bitmap, src_rect, *args|
       opacity = 255
       if args.length != 1
@@ -885,6 +991,7 @@ module MkxpBinding
     method :void, :blur, []
     method :void, :radial_blur, [:int, :int]
     method :void, :draw_text, [Rect, :string, :bool] do |*args|
+      MkxpBinding::mkxpMsgboxString(args.to_s + "\nfont: {#{font.name.to_s}, #{font.size}} [#{Font.default_name.to_s}, #{Font.default_size}]")
       r = args[0]
       s = args[1]
       if args.length == 3
@@ -899,7 +1006,11 @@ module MkxpBinding
       end
       MkxpBinding::mkxpBitmapDrawText(ptr, r, s, al)
     end
-    method Rect, :text_size, [:string]
+    method Rect, :text_size, [:string] do |txt|
+      rp = MkxpBinding::mkxpBitmapTextSize(txt)
+      rp.send(:ptr=, FFI::AutoPointer(rp.ptr, MkxpBinding.method(mkxpRectDelete)))
+      rp
+    end
   end
   
   class_binding :Viewport, Disposable do
@@ -909,7 +1020,7 @@ module MkxpBinding
       if args.length == 0
         r = Rect.new(0,0, -1, -1)
       elsif args.length == 1
-        r = args[0]
+        r = args[0] != nil ? args[0] : Rect.new(0,0, -1, -1)
       else
         r = Rect.new(args[0], args[1], args[2], args[3])
       end
@@ -1201,7 +1312,11 @@ module MkxpBinding
     end
     static_method Bitmap, :snap_to_bitmap, []
     static_method :void, :frame_reset, []
-    static_method :int, :width, []
+    static_method :int, :width, [] do
+        i = MkxpBinding::mkxpGraphicsWidth()
+#         MkxpBinding::mkxpMsgboxString("Graphics.width = #{i}")
+        i
+    end
     static_method :int, :height, []
     static_method :void, :resize_screen, [:int, :int]
     static_method :void, :play_movie, [:string]
@@ -1270,8 +1385,6 @@ end
 
 class RGSSReset < Exception
 end
-
-f = Font.new(["Arial"], 24)
 
 def msgbox(arg, *args)
   prntStr = arg.to_s()

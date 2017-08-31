@@ -5,10 +5,16 @@
 
 extern "C" {
 	BINDING_CONSTRUCTOR(Window)(Viewport* vp, int x, int y, int w, int h) {
-		if(shState->rgssVersion > 1)
-			return new WindowVX(x, y, w, h);
-        else if(shState->rgssVersion == 1)
-			return new Window(vp);
+		if(shState->rgssVersion > 1) {
+            WindowVX* win = new WindowVX(x, y, w, h);
+            win->initDynAttribs();
+			return win;
+        }
+        else if(shState->rgssVersion == 1){
+            Window* win = new Window(vp);
+            win->initDynAttribs();
+			return win;
+        }
 		return nullptr;
 	}
 	BINDING_DESTRUCTOR_VX(Window)
@@ -58,19 +64,18 @@ extern "C" {
 	BINDING_PROPERTY_XPONLY(Window, int, Stretch)
 	BINDING_PROPERTY_VXONLY_REF(Window, Tone, Tone)
 	
-	BINDING_METHOD(Window, FFIRect, GetCursorRect)(void* p) {
+	BINDING_METHOD(Window, Rect*, GetCursorRect)(void* p) {
 		if(shState->rgssVersion > 1) {
-			reinterpret_cast<WindowVX*>(p)->getCursorRect();
+			return &reinterpret_cast<WindowVX*>(p)->getCursorRect();
 		} else {
-			reinterpret_cast<Window*>(p)->getCursorRect();
+			return &reinterpret_cast<Window*>(p)->getCursorRect();
 		}
 	}
-	BINDING_METHOD(Window, void, SetCursorRect)(void* p, FFIRect r) {
-		Rect rect = r;
+	BINDING_METHOD(Window, void, SetCursorRect)(void* p, Rect* r) {
 		if(shState->rgssVersion > 1) {
-			reinterpret_cast<WindowVX*>(p)->setCursorRect(rect);
+			reinterpret_cast<WindowVX*>(p)->setCursorRect(*r);
 		} else {
-			reinterpret_cast<Window*>(p)->setCursorRect(rect);
+			reinterpret_cast<Window*>(p)->setCursorRect(*r);
 		}
 	}
 	

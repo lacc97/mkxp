@@ -4,7 +4,9 @@
 
 extern "C" {
 	BINDING_CONSTRUCTOR(Plane)(Viewport* v) {
-		return new Plane(v);
+		Plane* p = new Plane(v);
+        p->initDynAttribs();
+        return p;
 	}
 	BINDING_DESTRUCTOR(Plane)
 	
@@ -18,6 +20,6 @@ extern "C" {
 	BINDING_PROPERTY(Plane, float, ZoomY)
 	BINDING_PROPERTY(Plane, int, Opacity)
 	BINDING_PROPERTY(Plane, int, BlendType)
-	BINDING_PROPERTY(Plane, Color, Color)
-	BINDING_PROPERTY(Plane, Tone, Tone)
+	BINDING_PROPERTY_REF(Plane, Color, Color)
+	BINDING_PROPERTY_REF(Plane, Tone, Tone)
 }

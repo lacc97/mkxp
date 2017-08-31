@@ -17,7 +17,11 @@ extern "C" {
         std::vector<std::string>* vecptr = reinterpret_cast<std::vector<std::string>*>(strvec);
         Font* fptr = new Font(vecptr, size);
         delete vecptr;
+//         fptr->initDynAttribs();
         return fptr;
+    }
+    void* mkxpFontNewCopy(Font* other) {
+        return new Font(*other);
     }
     BINDING_DESTRUCTOR(Font)
 

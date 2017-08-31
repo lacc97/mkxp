@@ -49,10 +49,12 @@ extern "C" {
 	}
 	
 	int mkxpGraphicsWidth() {
+//         std::cout << "Graphics Width = " << shState->graphics().width() << std::endl;
 		return shState->graphics().width();
 	}
 	
 	int mkxpGraphicsHeight() {
+//         std::cout << "Graphics Height = " << shState->graphics().height() << std::endl;
 		return shState->graphics().height();
 	}
 	

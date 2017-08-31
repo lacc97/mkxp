@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <iostream>
 
 #include "font.h"
 #include "etc.h"
@@ -67,16 +68,20 @@ struct FFITone {
 #define BINDING_METHOD(klass, retType, methodName) retType mkxp##klass##methodName
 #define BINDING_PROPERTY_DET(klass, propType, propName, libPropName) \
 	propType mkxp##klass##Get##propName(void* ptr) { \
+        std::cout << "Getting "#propName"(" << reinterpret_cast<klass*>(ptr)->get##libPropName() << ") in "#klass"(" << ptr << ")" << std::endl; \
 		return reinterpret_cast<klass*>(ptr)->get##libPropName(); \
 	} \
-	void mkxp##klass##Set##propName(void* ptr, propType val) {\
+	void mkxp##klass##Set##propName(void* ptr, propType val) { \
+        std::cout << "Setting "#propName"(" << val << ") in "#klass"(" << ptr << ")" << std::endl; \
 		reinterpret_cast<klass*>(ptr)->set##libPropName(val); \
 	}
 #define BINDING_STATIC_PROPERTY_DET(klass, propType, propName, libPropName) \
 	propType mkxp##klass##Get##propName() { \
+        std::cout << "Getting "#propName"(" << klass::get##libPropName() << ") in "#klass << std::endl; \
 		return klass::get##libPropName(); \
 	} \
-	void mkxp##klass##Set##propName(propType val) {\
+	void mkxp##klass##Set##propName(propType val) { \
+        std::cout << "Setting "#propName"(" << val << ") in "#klass << std::endl; \
 		klass::set##libPropName(val); \
 	}
 #define BINDING_PROPERTY_REF(klass, propType, propName) \

@@ -3,6 +3,7 @@
 #include "sharedstate.h"
 #include "eventthread.h"
 #include "filesystem.h"
+#include "font.h"
 #include "util.h"
 #include "sdl-util.h"
 #include "debugwriter.h"
@@ -325,6 +326,9 @@ static void ffiBindingExecute() {
     }
 
     int state;
+    
+    Font::initDefaults(shState->fontState());
+    Font::initDefaultDynAttribs();
 
     rb_eval_string_protect(reinterpret_cast<const char*>(binding_ffi_rb), &state);
 //     std::cout << "" << std::endl;

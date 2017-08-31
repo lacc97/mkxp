@@ -389,6 +389,7 @@ elseif(BINDING STREQUAL "FFI")
 		binding-ffi/graphics-binding.cpp
 		binding-ffi/input-binding.cpp
 		binding-ffi/plane-binding.cpp
+		binding-ffi/rect-binding.cpp
 		binding-ffi/sprite-binding.cpp
 		binding-ffi/table-binding.cpp
 		binding-ffi/tilemap-binding.cpp

@@ -3,21 +3,22 @@
 #include "viewport.h"
 
 extern "C" {
-	BINDING_CONSTRUCTOR(Viewport)(FFIRect rect) {
-		Rect r = rect;
-		if(rect.width < 0 || rect.height < 0)
-			return new Viewport();
+	BINDING_CONSTRUCTOR(Viewport)(Rect* rect) {
+        Viewport* v;
+		if(rect->width < 0 || rect->height < 0)
+			v = new Viewport();
 		else
-			return new Viewport(&r);
+			v = new Viewport(rect);
+        v->initDynAttribs();
+        return v;
 	}
 	BINDING_DESTRUCTOR(Viewport)
 	
-	FFIRect mkxpViewportGetRect(Viewport* ptr) {
-		return ptr->getRect();
+	Rect* mkxpViewportGetRect(Viewport* ptr) {
+		return &ptr->getRect();
 	}
-	void mkxpViewportSetRect(Viewport* ptr, FFIRect r) {
-		Rect re = r;
-		return ptr->setRect(re);
+	void mkxpViewportSetRect(Viewport* ptr, Rect* r) {
+		return ptr->setRect(*r);
 	}
 	BINDING_PROPERTY(Viewport, int, Visible)
 	BINDING_PROPERTY(Viewport, int, Z)
