@@ -6,6 +6,7 @@ extern "C" {
 	BINDING_CONSTRUCTOR(Table)(int xsize, int ysize, int zsize) {
 		return new Table(xsize, ysize, zsize);
 	}
+	BINDING_COPY_CONSTRUCTOR(Table)
 	BINDING_DESTRUCTOR(Table)
 	
 	BINDING_METHOD(Table, void, Resize)(Table* ptr, int x, int y, int z) {

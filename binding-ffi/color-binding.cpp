@@ -7,6 +7,8 @@ extern "C" {
 		return new Color(r, g, b, a);
 	}
 	BINDING_DESTRUCTOR(Color)
+    
+    BINDING_ASSIGN(Color)
 	
 	BINDING_PROPERTY(Color, float, Red)
 	BINDING_PROPERTY(Color, float, Green)

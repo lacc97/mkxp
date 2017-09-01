@@ -7,6 +7,7 @@ extern "C" {
 		return new Tone(r, g, b, gr);
 	}
 	BINDING_DESTRUCTOR(Tone)
+    BINDING_ASSIGN(Tone)
 	
 	BINDING_PROPERTY(Tone, float, Red)
 	BINDING_PROPERTY(Tone, float, Green)

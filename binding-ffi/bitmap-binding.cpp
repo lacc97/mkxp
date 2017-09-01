@@ -8,12 +8,18 @@ extern "C" {
 	BINDING_DESTRUCTOR(Bitmap)
 	
 	void* mkxpBitmapInitializeFilename(const char* filename) {
-		return new Bitmap(filename);
+        Bitmap* b = new Bitmap(filename);
+        b->setInitFont(new Font());
+		return b;
 	}
 	
 	void* mkxpBitmapInitializeExtent(int width, int height) {
-		return new Bitmap(width, height);
+		Bitmap* b = new Bitmap(width, height);
+        b->setInitFont(new Font());
+		return b;
 	}
+	
+	BINDING_ASSIGN(Bitmap)
 	
 	int mkxpBitmapWidth(void* ptr) {
 		return reinterpret_cast<Bitmap*>(ptr)->width();

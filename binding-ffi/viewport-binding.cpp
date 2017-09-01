@@ -13,13 +13,9 @@ extern "C" {
         return v;
 	}
 	BINDING_DESTRUCTOR(Viewport)
+//     BINDING_ASSIGN(Viewport)
 	
-	Rect* mkxpViewportGetRect(Viewport* ptr) {
-		return &ptr->getRect();
-	}
-	void mkxpViewportSetRect(Viewport* ptr, Rect* r) {
-		return ptr->setRect(*r);
-	}
+	BINDING_PROPERTY_REF(Viewport, Rect, Rect)
 	BINDING_PROPERTY(Viewport, int, Visible)
 	BINDING_PROPERTY(Viewport, int, Z)
 	BINDING_PROPERTY_DET(Viewport, int, Ox, OX)

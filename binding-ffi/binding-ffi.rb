@@ -152,6 +152,10 @@ class FFICModule
     FFICStaticMethod.new(moduleContext, namespaceName, klass, :Delete, :finalize, [:pointer], :void)
   end
   
+  def assign
+    FFICStaticMethod.new(moduleContext, namespaceName, klass, :Assign, :_do_c_assign, [:pointer, :pointer], :void)
+  end
+  
   def method(rtype, mname, argtypes)
     FFICMethod.new(moduleContext, namespaceName, klass, c_method_base_name(mname), mname, argtypes.insert(0, :pointer), rtype)
   end
@@ -166,8 +170,14 @@ class FFICModule
   def property(type, pname)
     [FFICMethod.new(moduleContext, namespaceName, klass, :"Get#{c_method_base_name(pname)}", :"#{pname}", [:pointer], type), FFICMethod.new(moduleContext, namespaceName, klass, :"Set#{c_method_base_name(pname)}", :"#{pname}=", [:pointer, type], :void)]
   end
+  def dynamic_property(type, pname)
+    [FFICMethod.new(moduleContext, namespaceName, klass, :"Get#{c_method_base_name(pname)}", :"#{pname}", [:pointer], type), FFICMethod.new(moduleContext, namespaceName, klass, :"Set#{c_method_base_name(pname)}", :"#{pname}=", [:pointer, type], :void)]
+  end
   
   def static_property(type, pname)
+    [FFICStaticMethod.new(moduleContext, namespaceName, klass, :"Get#{c_method_base_name(pname)}", :"#{pname}", [], type), FFICStaticMethod.new(moduleContext, namespaceName, klass, :"Set#{c_method_base_name(pname)}", :"#{pname}=", [type], :void)]
+  end
+  def dynamic_static_property(type, pname)
     [FFICStaticMethod.new(moduleContext, namespaceName, klass, :"Get#{c_method_base_name(pname)}", :"#{pname}", [], type), FFICStaticMethod.new(moduleContext, namespaceName, klass, :"Set#{c_method_base_name(pname)}", :"#{pname}=", [type], :void)]
   end
   
@@ -195,6 +205,10 @@ class FFICModuleC < FFICModule
     super.bindC
   end
   
+  def assign
+    super.bindC
+  end
+  
   def method(rtype, mname, argtypes)
     super.bindC
   end
@@ -208,11 +222,17 @@ class FFICModuleC < FFICModule
       mth.bindC
     end
   end
+  def dynamic_property(type, pname)
+      super[0].bindC
+  end
   
   def static_property(type, pname)
     super.each do |mth|
       mth.bindC
     end
+  end
+  def dynamic_static_property(type, pname)
+      super[0].bindC
   end
 end
 
@@ -247,26 +267,7 @@ class FFICModuleR < FFICModule
         instance
       end
   end
-  
-#   def constructor(ctrtypes)
-#     me = self
-#     if block_given?
-#       super.bindRuby do |*args|
-#         @ptr = FFI::AutoPointer.new(yield(*args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
-#       end
-#     else
-#       method = super
-#       method.bindRuby do |*args|
-#         @ptr = FFI::AutoPointer.new(moduleContext.send(method.cName, *args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
-#       end
-#     end
-#   end
-#   def ruby_constructor(&block)
-#     me = self
-#     super.bindRuby do |*args|
-#       @ptr = FFI::AutoPointer.new(yield(*args), me.moduleContext.method(FFICModule.instance_method(:destructor).bind(me).call.cName))
-#     end
-#   end
+
   def constructor(ctrtypes)
     me = self
     if block_given?
@@ -297,6 +298,20 @@ class FFICModuleR < FFICModule
   def destructor
   end
   
+  def assign
+    me = self
+    method = super
+    method.bindRuby do |curr, oth|
+      if !curr.is_a?(me.klass) or !oth.is_a?(me.klass)
+        raise ArgumentError.new "Arguments must be of class #{me.klass}"
+      end
+      if curr.ptr.null? or oth.ptr.null?
+        raise ArgumentError.new "Arguments cannot be null"
+      end
+      me.moduleContext.send(method.cName, curr.ptr, oth.ptr)
+    end
+  end
+  
   def class_body(&block)
     me = self
     klass.class_exec &block
@@ -308,10 +323,10 @@ class FFICModuleR < FFICModule
   
   def method(rtype, mname, argtypes)
     me = self
+    method = super
     if block_given?
-      super.bindRuby(&Proc.new)
+      method.bindRuby(&Proc.new)
     else
-      method = super
       method.bindRuby do |*args|
         me.moduleContext.send(method.cName, ptr, *args)
       end
@@ -328,10 +343,10 @@ class FFICModuleR < FFICModule
   
   def static_method(rtype, mname, argtypes, &block)
     me = self
+    method = super
     if block_given?
-      super.bindRuby(&Proc.new)
+      method.bindRuby(&Proc.new)
     else
-      method = super
       method.bindRuby do |*args|
         me.moduleContext.send(method.cName, *args)
       end
@@ -357,6 +372,70 @@ class FFICModuleR < FFICModule
       me.moduleContext.send(gs.at(1).cName, ptr, value)
     end
   end
+#   def dynamic_property(type, pname)
+#     gs = super
+#     me = self
+#     gs.at(0).bindRuby do
+#       instvar = instance_variable_get(:"@#{pname}")
+#       if instvar == nil
+#         dptr = me.moduleContext.send(gs.at(0).cName, ptr)
+#         typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
+#         dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
+#         instance_variable_set(:"@#{pname}", dptr)
+#         instvar = instance_variable_get(:"@#{pname}")
+#       end
+#       instvar
+#     end
+#     gs.at(1).bindRuby do |val|
+#       instvar = instance_variable_get(:"@#{pname}")
+#       if instvar == nil
+#         dptr = me.moduleContext.send(gs.at(0).cName, ptr)
+#         typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
+#         dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
+#         instance_variable_set(:"@#{pname}", dptr)
+#         instvar = instance_variable_get(:"@#{pname}")
+#       end
+#       instance_variable_set(:"@#{pname}", val)
+#     end
+#   end
+  def dynamic_property(type, pname)
+    gs = super
+    me = self
+    gs.at(0).bindRuby do
+      instvar = instance_variable_get(:"@#{pname}")
+      puts("#{me.klass.to_s}::#{gs.at(1).rName}:")
+      puts("\tinstvar: #{instvar.inspect}")
+      if !ptr.is_a?(FFI::AutoPointer)
+        instvar = me.moduleContext.send(gs.at(0).cName, ptr)
+        puts("\tinstvar <- #{instvar} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
+      elsif instvar == nil
+        dptr = me.moduleContext.send(gs.at(0).cName, ptr)
+        puts("\tdptr <- #{dptr.inspect} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
+        typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
+        dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
+        instance_variable_set(:"@#{pname}", dptr)
+        instvar = instance_variable_get(:"@#{pname}")
+      end
+      instvar
+    end
+    gs.at(1).bindRuby do |val|
+      instvar = instance_variable_get(:"@#{pname}")
+      puts("#{me.klass.to_s}::#{gs.at(1).rName}:")
+      puts("\tinstvar: #{instvar.inspect}; val: #{val.inspect}")
+      if !ptr.is_a?(FFI::AutoPointer)
+        instvar = me.moduleContext.send(gs.at(0).cName, ptr)
+        puts("\tinstvar <- #{instvar} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
+      elsif instvar == nil
+        dptr = me.moduleContext.send(gs.at(0).cName, ptr)
+        puts("\tdptr <- #{dptr.inspect} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
+        typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
+        dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
+        instance_variable_set(:"@#{pname}", dptr)
+        instvar = instance_variable_get(:"@#{pname}")
+      end
+      instvar.class._do_c_assign(instvar, val)
+    end
+  end
   
   def static_property(type, pname)
     gs = super
@@ -369,9 +448,41 @@ class FFICModuleR < FFICModule
       me.moduleContext.send(gs.at(1).cName, value)
     end
   end
+  def dynamic_static_property(type, pname)
+    gs = super
+    me = self
+    
+    gs.at(0).bindRuby do
+      instvar = instance_variable_get(:"@@#{pname}")
+      puts("instvar: #{instvar.inspect}; val: #{val.inspect}")
+      if instvar == nil
+        dptr = me.moduleContext.send(gs.at(0).cName, ptr)
+        puts("dptr <- #{dptr.inspect} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
+        typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
+        dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
+        instance_variable_set(:"@@#{pname}", dptr)
+        instvar = instance_variable_get(:"@@#{pname}")
+      end
+      instvar
+    end
+    gs.at(1).bindRuby do |val|
+      instvar = instance_variable_get(:"@@#{pname}")
+      puts("instvar: #{instvar.inspect}; val: #{val.inspect}")
+      if instvar == nil
+        dptr = me.moduleContext.send(gs.at(0).cName, ptr)
+        puts("dptr <- #{dptr.inspect} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
+        typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
+        dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
+        instance_variable_set(:"@@#{pname}", dptr)
+        instvar = instance_variable_get(:"@@#{pname}")
+      end
+      instvar.class._do_c_assign(instvar, val)
+    end
+  end
 end
 
 def class_binding(klass, parent = Object)
+  mymod = self
   self.const_set(klass, Class.new(parent))
   klass = self.const_get(klass)
   
@@ -433,6 +544,7 @@ module MkxpBinding
   
   attach_function :mkxpRgssMain, [], :void
   attach_function :mkxpMsgboxString, [:string], :void
+  attach_function :mkxpStdCout, [:string], :void
   
   attach_function :mkxpSDLReadFile, [:pointer, :string], :int
   
@@ -530,6 +642,8 @@ module MkxpBinding
     end
     destructor
     
+    assign
+    
     property :float, :red
     property :float, :green
     property :float, :blue
@@ -554,83 +668,6 @@ module MkxpBinding
       end
     end
   end
-  
-#   class FFIRect < FFI::Struct
-#     layout   :x, :int,
-#         :y, :int,
-#         :width, :int,
-#         :height, :int
-#   end
-#   class Rect
-#     attr_accessor :intobj
-#     private :intobj=
-#     
-#     extend FFI::DataConverter
-#     
-#     native_type FFIRect.by_value
-#     
-#     def self.from_native(value, ctx)
-#       o = Rect.new
-#       o.send(:intobj=, value)
-#       o
-#     end
-#     
-#     def self.to_native(value, ctx)
-#       value.intobj
-#     end
-#     
-#     def initialize(ix = 0, iy = 0, iw = 0, ih = 0)
-#       @intobj = FFIRect.new
-#       set(ix, iy, iw, ih)
-#     end
-#     
-#     def inspect
-#       "{x: #{x}; y: #{y}; w: #{width}; h: #{height}}"
-#     end
-#     
-#     def set(*args)
-#       if args.length == 1
-#         x = args[0].x
-#         y = args[0].y
-#         width = args[0].width
-#         height = args[0].height
-#       elsif args.length == 4
-#         x = args[0]
-#         y = args[1]
-#         width = args[2]
-#         height = args[3]
-#       end
-#     end
-#     
-#     def empty
-#       set(0, 0, 0, 0)
-#     end
-#     
-#     def x
-#       intobj[:x]
-#     end
-#     def y
-#       intobj[:y]
-#     end
-#     def width
-#       intobj[:width]
-#     end
-#     def height
-#       intobj[:height]
-#     end
-#     def x= ix
-#       intobj[:x] = ix
-#     end
-#     def y= iy
-#       intobj[:y] = iy
-#     end
-#     def width= iw
-#       intobj[:width] = iw
-#     end
-#     def height= ih
-#       intobj[:height] = ih
-#     end
-#   end
   
   class_binding :Rect, Serializable do
     ffi_visible
@@ -657,6 +694,8 @@ module MkxpBinding
       MkxpBinding::mkxpRectNew(r, g, b, a)
     end
     destructor
+    
+    assign
     
     property :int, :x
     property :int, :y
@@ -712,6 +751,8 @@ module MkxpBinding
       MkxpBinding::mkxpToneNew(r, g, b, gr)
     end
     destructor
+    
+    assign
     
     property :float, :red
     property :float, :green
@@ -828,6 +869,7 @@ module MkxpBinding
       end
       MkxpBinding::mkxpTableNew(x, y, z)
     end
+    copy_constructor
     destructor
     
     method :void, :resize, [:int, :int, :int]
@@ -888,7 +930,12 @@ module MkxpBinding
     
     constructor [StringVector, :int] do |*args|
       @name = args.length >= 1 ? args[0] : nil
-      MkxpBinding::mkxpFontNew(@name, args.length == 2 ? args[1] : 0)
+      p = MkxpBinding::mkxpFontNew(@name, args.length == 2 ? args[1] : 0)
+#       @color = MkxpBinding::mkxpFontGetColor(p)
+#       @color.ptr = FFI::AutoPointer.new(@color.ptr, MkxpBinding.method(:mkxpColorDelete))
+#       @out_color = MkxpBinding::mkxpFontGetOutColor(p)
+#       @out_color.ptr = FFI::AutoPointer.new(@color.ptr, MkxpBinding.method(:mkxpColorDelete))
+      p
     end
     copy_constructor
     destructor
@@ -898,16 +945,16 @@ module MkxpBinding
     property :bool, :italic
     property :bool, :outline
     property :bool, :shadow
-    property Color, :color
-    property Color, :out_color
+    dynamic_property Color, :color
+    dynamic_property Color, :out_color
     
     static_property :int, :default_size
     static_property :bool, :default_bold
     static_property :bool, :default_italic
     static_property :bool, :default_outline
     static_property :bool, :default_shadow
-    static_property Color, :default_color
-    static_property Color, :default_out_color
+    dynamic_static_property Color, :default_color
+    dynamic_static_property Color, :default_out_color
     static_method :bool, :exists?, [:string]
   end
   
@@ -925,7 +972,9 @@ module MkxpBinding
     end
     destructor
     
-    property Font, :font
+    assign
+    
+    dynamic_property Font, :font
     
     method :int, :width, []
     method :int, :height, []
@@ -935,36 +984,38 @@ module MkxpBinding
       rp
     end
     method :void, :blt, [:int, :int, :pointer, Rect, :int] do |x, y, src_bitmap, src_rect, *args|
-      opacity = 255
+      op = 255
       if args.length != 1
-        opacity = args[0]
+        op = args[0]
       end
-      MkxpBinding::mkxpBitmapBlt(ptr, x, y, src_bitmap.ptr, src_rect, opacity)
+      MkxpBinding::mkxpBitmapBlt(ptr, x, y, src_bitmap.ptr, src_rect, op)
     end
     method :void, :stretch_blt, [Rect, :pointer, Rect, :int] do |dest_rect, src_bitmap, src_rect, *args|
-      opacity = 255
+      op = 255
       if args.length != 1
-        opacity = args[0]
+        op = args[0]
       end
-      MkxpBinding::mkxpBitmapStretchBlt(ptr, dest_rect, src_bitmap.ptr, src_rect, opacity)
+      MkxpBinding::mkxpBitmapStretchBlt(ptr, dest_rect, src_bitmap.ptr, src_rect, op)
     end
     method :void, :fill_rect, [Rect, Color] do |*args|
       drect = args[0]
+      col = args[1]
       if args.length == 5
         drect = ::Rect.new(args[0], args[1], args[2], args[3])
-        color = args[4]
+        col = args[4]
       end
-      MkxpBinding::mkxpBitmapFillRect(ptr, drect, color)
+      MkxpBinding::mkxpBitmapFillRect(ptr, drect, col)
     end
     method :void, :gradient_fill_rect, [Rect, Color, Color, :bool] do |*args|
       drect = args[0]
       color1 = args[1]
       color2 = args[2]
+      vertical = false
       if args.length == 4
         vertical = args[3]
       end
       if args.length == 6 or args.length == 7
-        drect = ::Rect.new(args[0], args[1], args[2], args[3])
+        drect = Rect.new(args[0], args[1], args[2], args[3])
         color1 = args[4]
         color2 = args[5]
         if args.length == 7
@@ -994,11 +1045,12 @@ module MkxpBinding
       MkxpBinding::mkxpMsgboxString(args.to_s + "\nfont: {#{font.name.to_s}, #{font.size}} [#{Font.default_name.to_s}, #{Font.default_size}]")
       r = args[0]
       s = args[1]
+      al = 0
       if args.length == 3
         al = args[2]
       end
       if args.length == 5 or args.length == 6
-        r = ::Rect.new(args[0], args[1], args[2], args[3])
+        r = Rect.new(args[0], args[1], args[2], args[3])
         s = args[4]
         if args.length == 6
           al = args[5]
@@ -1007,7 +1059,7 @@ module MkxpBinding
       MkxpBinding::mkxpBitmapDrawText(ptr, r, s, al)
     end
     method Rect, :text_size, [:string] do |txt|
-      rp = MkxpBinding::mkxpBitmapTextSize(txt)
+      rp = MkxpBinding::mkxpBitmapTextSize(ptr, txt)
       rp.send(:ptr=, FFI::AutoPointer(rp.ptr, MkxpBinding.method(mkxpRectDelete)))
       rp
     end
@@ -1028,19 +1080,15 @@ module MkxpBinding
     end
     destructor
     
-    property Rect, :rect
+    dynamic_property Rect, :rect
     property :bool, :visible
     property :int, :z
     property :int, :ox
     property :int, :oy
-    property Color, :color
-    property Tone, :tone
+    dynamic_property Color, :color
+    dynamic_property Tone, :tone
     
     method :void, :flash, [Color, :int] do |col, dur|
-      if col == nil
-        col = ::Color.new(0, 0, 0, 0)
-        col.send(:"_private_color_set_no_clamp", -1, -1, -1, -1)
-      end
       MkxpBinding::mkxpViewportFlash(ptr, col, dur)
     end
     method :void, :update, [] 
@@ -1101,8 +1149,8 @@ module MkxpBinding
       MkxpBinding::mkxpPlaneOpacity(ptr, _mkxp_clamp(op, 0, 255))
     end
     property :int, :blend_type
-    property Color, :color
-    property Tone, :tone
+    dynamic_property Color, :color
+    dynamic_property Tone, :tone
   end
   
   class_binding :Sprite, Disposable do
@@ -1118,7 +1166,7 @@ module MkxpBinding
     destructor
     
     property Bitmap, :bitmap
-    property Rect, :src_rect
+    dynamic_property Rect, :src_rect
     property Viewport, :viewport
     property :bool, :visible
     property :int, :x
@@ -1135,21 +1183,13 @@ module MkxpBinding
     property :int, :wave_phase
     property :bool, :mirror
     property :int, :bush_depth
-    property :int, :bush_opacity do |bo|
-      MkxpBinding::mkxpSpriteBushOpacity(ptr, _mkxp_clamp(bo, 0, 255))
-    end
-    property :int, :opacity do |op|
-      MkxpBinding::mkxpSpriteOpacity(ptr, _mkxp_clamp(op, 0, 255))
-    end
+    property :int, :bush_opacity
+    property :int, :opacity
     property :int, :blend_type
-    property Color, :color
-    property Tone, :tone
+    dynamic_property Color, :color
+    dynamic_property Tone, :tone
     
     method :void, :flash, [Color, :int] do |col, dur|
-      if col == nil
-        col = ::Color.new(0, 0, 0, 0)
-        col.send(:"_private_color_set_no_clamp", -1, -1, -1, -1)
-      end
       MkxpBinding::mkxpSpriteFlash(ptr, col, dur)
     end
     method :void, :update, []
@@ -1162,25 +1202,25 @@ module MkxpBinding
     
     constructor [Viewport, :int, :int, :int, :int] do |*args|
       vp = nil
-      x = 0
-      y = 0
-      w = 0
-      h = 0
+      ix = 0
+      iy = 0
+      iw = 0
+      ih = 0
       if args.length == 1
         vp = args[0]
       elsif args.length == 4
-        x = args[0]
-        y = args[1]
-        w = args[2]
-        h = args[3]
+        ix = args[0]
+        iy = args[1]
+        iw = args[2]
+        ih = args[3]
       end
-      MkxpBinding::mkxpWindowNew(vp, x, y, w, h)
+      MkxpBinding::mkxpWindowNew(vp, ix, iy, iw, ih)
     end
     destructor
     
     property Bitmap, :windowskin
     property Bitmap, :contents
-    property Rect, :cursor_rect
+    dynamic_property Rect, :cursor_rect
     property Viewport, :viewport
     property :bool, :active
     property :bool, :visible
@@ -1200,7 +1240,7 @@ module MkxpBinding
     property :int, :contents_opacity
     property :int, :openness
     property :bool, :stretch
-    property Tone, :tone
+    dynamic_property Tone, :tone
     
     method :void, :update, []
     method :void, :move, [:int, :int, :int, :int]
@@ -1417,4 +1457,12 @@ end
 
 def rgss_main
   yield
+end
+
+def puts(arg, *args)
+  prntStr = arg.to_s()
+  args.each do |arg_item|
+    prntStr += arg_item.to_s()
+  end
+  MkxpBinding::mkxpStdCout(prntStr)
 end

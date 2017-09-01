@@ -12,6 +12,7 @@ extern "C" {
 			return new Tilemap(vp);
 	}
 	BINDING_DESTRUCTOR_VX(Tilemap)
+    BINDING_ASSIGN_VX(Tilemap)
 	
 	BINDING_PROPERTY_VX(Tilemap, Table*, MapData)
 	BINDING_PROPERTY_VX(Tilemap, Table*, FlashData)

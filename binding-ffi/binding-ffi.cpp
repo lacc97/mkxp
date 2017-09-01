@@ -43,6 +43,10 @@ extern "C" {
         shState->eThread().showMessageBox(str);
     }
 
+    void mkxpStdCout(const char* str) {
+        std::cout << str << std::endl;
+    }
+    
     int mkxpSDLReadFile(char** dest, const char* src) {
         SDL_RWops* f = RWFromFile(src, "rb");
 

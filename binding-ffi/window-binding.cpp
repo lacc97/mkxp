@@ -18,6 +18,7 @@ extern "C" {
 		return nullptr;
 	}
 	BINDING_DESTRUCTOR_VX(Window)
+//     BINDING_ASSIGN_VX(Window)
 	
 	BINDING_PROPERTY_VX(Window, Bitmap*, Windowskin)
 	BINDING_PROPERTY_VX(Window, Bitmap*, Contents)
@@ -64,20 +65,7 @@ extern "C" {
 	BINDING_PROPERTY_XPONLY(Window, int, Stretch)
 	BINDING_PROPERTY_VXONLY_REF(Window, Tone, Tone)
 	
-	BINDING_METHOD(Window, Rect*, GetCursorRect)(void* p) {
-		if(shState->rgssVersion > 1) {
-			return &reinterpret_cast<WindowVX*>(p)->getCursorRect();
-		} else {
-			return &reinterpret_cast<Window*>(p)->getCursorRect();
-		}
-	}
-	BINDING_METHOD(Window, void, SetCursorRect)(void* p, Rect* r) {
-		if(shState->rgssVersion > 1) {
-			reinterpret_cast<WindowVX*>(p)->setCursorRect(*r);
-		} else {
-			reinterpret_cast<Window*>(p)->setCursorRect(*r);
-		}
-	}
+	BINDING_PROPERTY_VX_REF(Window, Rect, CursorRect)
 	
 	BINDING_METHOD(Window, void, Update)(void* p) {
 		if(shState->rgssVersion > 1) {

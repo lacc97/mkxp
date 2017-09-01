@@ -6,17 +6,14 @@ extern "C" {
 	BINDING_CONSTRUCTOR(Sprite)(Viewport* vp) {
         Sprite* s = new Sprite(vp);
         s->initDynAttribs();
+        s->getBitmap();
 		return s;
 	}
 	BINDING_DESTRUCTOR(Sprite)
+//     BINDING_ASSIGN(Sprite)
 	
 	BINDING_PROPERTY(Sprite, Bitmap*, Bitmap)
-	Rect* mkxpSpriteGetSrcRect(Sprite* ptr) {
-		return &ptr->getSrcRect();
-	}
-	void mkxpSpriteSetSrcRect(Sprite* ptr, Rect* r) {
-		return ptr->setSrcRect(*r);
-	}
+	BINDING_PROPERTY_REF(Sprite, Rect, SrcRect)
 	BINDING_PROPERTY(Sprite, Viewport*, Viewport)
 	BINDING_PROPERTY(Sprite, int, Visible)
 	BINDING_PROPERTY(Sprite, int, X)

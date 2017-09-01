@@ -8,6 +8,8 @@ extern "C" {
     }
     BINDING_DESTRUCTOR(Rect)
     
+    BINDING_ASSIGN(Rect)
+    
     BINDING_PROPERTY(Rect, int, X)
     BINDING_PROPERTY(Rect, int, Y)
     BINDING_PROPERTY(Rect, int, Width)

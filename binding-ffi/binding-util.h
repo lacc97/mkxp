@@ -62,8 +62,14 @@ struct FFITone {
 };
 
 #define BINDING_CONSTRUCTOR(klass) void* mkxp##klass##New
+#define BINDING_COPY_CONSTRUCTOR(klass) void* mkxp##klass##NewCopy(klass* orig) { \
+    return new klass(*orig); \
+}
 #define BINDING_DESTRUCTOR(klass) void mkxp##klass##Delete(klass* ptr) { \
 	delete ptr; \
+}
+#define BINDING_ASSIGN(klass) void mkxp##klass##Assign(klass* curr, klass* oth) { \
+    *curr = *oth; \
 }
 #define BINDING_METHOD(klass, retType, methodName) retType mkxp##klass##methodName
 #define BINDING_PROPERTY_DET(klass, propType, propName, libPropName) \
@@ -86,6 +92,7 @@ struct FFITone {
 	}
 #define BINDING_PROPERTY_REF(klass, propType, propName) \
 	propType* mkxp##klass##Get##propName(void* ptr) { \
+        std::cout << "Getting "#propName"(" << (&reinterpret_cast<klass*>(ptr)->get##propName()) << ") in "#klass << std::endl; \
 		return &reinterpret_cast<klass*>(ptr)->get##propName(); \
 	} \
 	void mkxp##klass##Set##propName(void* ptr, propType* val) {\
@@ -106,6 +113,12 @@ struct FFITone {
 		delete reinterpret_cast<klass##VX*>(ptr); \
 	else \
 		delete reinterpret_cast<klass*>(ptr); \
+}
+#define BINDING_ASSIGN_VX(klass) void mkxp##klass##Assign(void* curr, void* oth) { \
+    if(shState->rgssVersion > 1) \
+		*reinterpret_cast<klass##VX*>(curr) = *reinterpret_cast<klass##VX*>(oth); \
+	else \
+		*reinterpret_cast<klass*>(curr) = *reinterpret_cast<klass*>(oth); \
 }
 #define BINDING_PROPERTY_VX_DET(klass, propType, propName, libPropName) propType mkxp##klass##Get##propName(void* ptr) { \
 		if(shState->rgssVersion > 1) \
@@ -129,9 +142,9 @@ struct FFITone {
 	} \
 	void mkxp##klass##Set##propName(void* ptr, propType* val) {\
 		if(shState->rgssVersion > 1) \
-			&reinterpret_cast<klass##VX*>(ptr)->set##propName(*val); \
+			reinterpret_cast<klass##VX*>(ptr)->set##propName(*val); \
 		else \
-			&reinterpret_cast<klass*>(ptr)->set##propName(*val); \
+			reinterpret_cast<klass*>(ptr)->set##propName(*val); \
 	}
 
 #define BINDING_PROPERTY_XPONLY_DET(klass, propType, propName, libPropName) propType mkxp##klass##Get##propName(void* ptr) { \

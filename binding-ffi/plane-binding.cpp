@@ -9,6 +9,7 @@ extern "C" {
         return p;
 	}
 	BINDING_DESTRUCTOR(Plane)
+//     BINDING_ASSIGN(Plane)
 	
 	BINDING_PROPERTY(Plane, Bitmap*, Bitmap)
 	BINDING_PROPERTY(Plane, Viewport*, Viewport)
