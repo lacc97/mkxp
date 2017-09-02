@@ -24,7 +24,7 @@ extern "C" {
 	BINDING_METHOD(Table, int, Get)(Table* ptr, int x, int y, int z) {
 		return ptr->at(x, y, z);
 	}
-	BINDING_METHOD(Table, int, Set)(Table* ptr, int x, int y, int z, int val) {
+	BINDING_METHOD(Table, void, Set)(Table* ptr, int x, int y, int z, int val) {
 		ptr->at(x, y, z) = val;
 	}
 	

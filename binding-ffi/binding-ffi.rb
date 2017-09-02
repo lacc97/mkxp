@@ -372,38 +372,12 @@ class FFICModuleR < FFICModule
       me.moduleContext.send(gs.at(1).cName, ptr, value)
     end
   end
-#   def dynamic_property(type, pname)
-#     gs = super
-#     me = self
-#     gs.at(0).bindRuby do
-#       instvar = instance_variable_get(:"@#{pname}")
-#       if instvar == nil
-#         dptr = me.moduleContext.send(gs.at(0).cName, ptr)
-#         typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
-#         dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
-#         instance_variable_set(:"@#{pname}", dptr)
-#         instvar = instance_variable_get(:"@#{pname}")
-#       end
-#       instvar
-#     end
-#     gs.at(1).bindRuby do |val|
-#       instvar = instance_variable_get(:"@#{pname}")
-#       if instvar == nil
-#         dptr = me.moduleContext.send(gs.at(0).cName, ptr)
-#         typeklassc = FFICModule.new(me.moduleContext, me.namespaceName, dptr.class)
-#         dptr.send(:ptr=, FFI::AutoPointer.new(dptr.ptr, me.moduleContext.method(:"#{typeklassc.destructor.cName}")))
-#         instance_variable_set(:"@#{pname}", dptr)
-#         instvar = instance_variable_get(:"@#{pname}")
-#       end
-#       instance_variable_set(:"@#{pname}", val)
-#     end
-#   end
   def dynamic_property(type, pname)
     gs = super
     me = self
     gs.at(0).bindRuby do
       instvar = instance_variable_get(:"@#{pname}")
-      puts("#{me.klass.to_s}::#{gs.at(1).rName}:")
+      puts("#{me.klass.to_s}::#{gs.at(0).rName}:")
       puts("\tinstvar: #{instvar.inspect}")
       if !ptr.is_a?(FFI::AutoPointer)
         instvar = me.moduleContext.send(gs.at(0).cName, ptr)
@@ -454,7 +428,6 @@ class FFICModuleR < FFICModule
     
     gs.at(0).bindRuby do
       instvar = instance_variable_get(:"@@#{pname}")
-      puts("instvar: #{instvar.inspect}; val: #{val.inspect}")
       if instvar == nil
         dptr = me.moduleContext.send(gs.at(0).cName, ptr)
         puts("dptr <- #{dptr.inspect} = #{me.moduleContext}.send(#{gs.at(0).cName}, #{ptr})")
@@ -545,6 +518,8 @@ module MkxpBinding
   attach_function :mkxpRgssMain, [], :void
   attach_function :mkxpMsgboxString, [:string], :void
   attach_function :mkxpStdCout, [:string], :void
+  
+  attach_function :mkxpProcessReset, [], :void
   
   attach_function :mkxpSDLReadFile, [:pointer, :string], :int
   
@@ -926,16 +901,14 @@ module MkxpBinding
         @@default_name = dn
         MkxpBinding::mkxpFontSetDefaultName(dn)
       end
+      
+      @@default_color = Color.new
+      @@default_out_color = Color.new
     end
     
     constructor [StringVector, :int] do |*args|
       @name = args.length >= 1 ? args[0] : nil
-      p = MkxpBinding::mkxpFontNew(@name, args.length == 2 ? args[1] : 0)
-#       @color = MkxpBinding::mkxpFontGetColor(p)
-#       @color.ptr = FFI::AutoPointer.new(@color.ptr, MkxpBinding.method(:mkxpColorDelete))
-#       @out_color = MkxpBinding::mkxpFontGetOutColor(p)
-#       @out_color.ptr = FFI::AutoPointer.new(@color.ptr, MkxpBinding.method(:mkxpColorDelete))
-      p
+      MkxpBinding::mkxpFontNew(@name, args.length == 2 ? args[1] : 0)
     end
     copy_constructor
     destructor
@@ -979,7 +952,7 @@ module MkxpBinding
     method :int, :width, []
     method :int, :height, []
     method Rect, :rect, [] do
-      rp = MkxpBinding::mkxpBitmapRect()
+      rp = MkxpBinding::mkxpBitmapRect(ptr)
       rp.send(:ptr=, FFI::AutoPointer(rp.ptr, MkxpBinding.method(mkxpRectDelete)))
       rp
     end
@@ -1041,8 +1014,7 @@ module MkxpBinding
     method :void, :hue_change, [:int]
     method :void, :blur, []
     method :void, :radial_blur, [:int, :int]
-    method :void, :draw_text, [Rect, :string, :bool] do |*args|
-      MkxpBinding::mkxpMsgboxString(args.to_s + "\nfont: {#{font.name.to_s}, #{font.size}} [#{Font.default_name.to_s}, #{Font.default_size}]")
+    method :void, :draw_text, [Rect, :string, :int] do |*args|
       r = args[0]
       s = args[1]
       al = 0
@@ -1145,9 +1117,7 @@ module MkxpBinding
     property :int, :oy
     property :float, :zoom_x
     property :float, :zoom_y
-    property :int, :opacity do |op|
-      MkxpBinding::mkxpPlaneOpacity(ptr, _mkxp_clamp(op, 0, 255))
-    end
+    property :int, :opacity
     property :int, :blend_type
     dynamic_property Color, :color
     dynamic_property Tone, :tone
@@ -1329,6 +1299,8 @@ module MkxpBinding
     static_property :int, :frame_rate
     static_property :int, :frame_count
     static_property :int, :brightness
+    static_property :bool, :fullscreen
+    static_property :bool, :show_cursor
     
     static_method :void, :update, []
     static_method :void, :wait, [:int]
@@ -1350,13 +1322,13 @@ module MkxpBinding
       end
       MkxpBinding::mkxpGraphicsTransition(dur, fn, vag)
     end
-    static_method Bitmap, :snap_to_bitmap, []
-    static_method :void, :frame_reset, []
-    static_method :int, :width, [] do
-        i = MkxpBinding::mkxpGraphicsWidth()
-#         MkxpBinding::mkxpMsgboxString("Graphics.width = #{i}")
-        i
+    static_method Bitmap, :snap_to_bitmap, [] do
+      bmp = MkxpBinding::mkxpGraphicsSnapToBitmap()
+      bmp.send(:ptr=, FFI::AutoPointer.new(bmp.ptr, MkxpBinding.method(:mkxpBitmapDelete)))
+      bmp
     end
+    static_method :void, :frame_reset, []
+    static_method :int, :width, []
     static_method :int, :height, []
     static_method :void, :resize_screen, [:int, :int]
     static_method :void, :play_movie, [:string]
@@ -1442,6 +1414,21 @@ def msgbox_p(obj, *objs)
   MkxpBinding::mkxpMsgboxString(prntStr)
 end
 
+def print(obj, *objs)
+  msgbox(obj, *objs)
+end
+def p(obj, *objs)
+  msgbox_p(obj, *objs)
+end
+
+def puts(arg, *args)
+  prntStr = arg.to_s()
+  args.each do |arg_item|
+    prntStr += arg_item.to_s()
+  end
+  MkxpBinding::mkxpStdCout(prntStr)
+end
+
 def save_data(obj, filename)
   File.open(filename, "wb") {|f| Marshal.dump(obj, f)}
 end
@@ -1452,17 +1439,20 @@ def load_data(filename)
 end
 
 def rgss_stop
-  
+  while true
+    Graphics.update
+  end
 end
 
 def rgss_main
-  yield
-end
-
-def puts(arg, *args)
-  prntStr = arg.to_s()
-  args.each do |arg_item|
-    prntStr += arg_item.to_s()
+  while true
+    begin
+      yield
+    rescue RGSSReset => resetCommand
+      puts "Restarting process..."
+      MkxpBinding::mkxpProcessReset()
+    rescue Exception => otherExc
+      raise otherExc
+    end
   end
-  MkxpBinding::mkxpStdCout(prntStr)
 end

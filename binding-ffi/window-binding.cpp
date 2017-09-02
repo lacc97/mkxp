@@ -3,11 +3,14 @@
 #include "window.h"
 #include "windowvx.h"
 
+#include "bitmap.h"
+
 extern "C" {
 	BINDING_CONSTRUCTOR(Window)(Viewport* vp, int x, int y, int w, int h) {
 		if(shState->rgssVersion > 1) {
             WindowVX* win = new WindowVX(x, y, w, h);
             win->initDynAttribs();
+//             win->setContents(new Bitmap(1, 1));
 			return win;
         }
         else if(shState->rgssVersion == 1){
@@ -88,7 +91,7 @@ extern "C" {
 	}
 	BINDING_METHOD(Window, int, Close)(void* p) {
 		if(shState->rgssVersion > 1) {
-			reinterpret_cast<WindowVX*>(p)->isOpen();
+			reinterpret_cast<WindowVX*>(p)->isClosed();
 		}
 		return false;
 	}

@@ -6,7 +6,6 @@ extern "C" {
 	BINDING_CONSTRUCTOR(Sprite)(Viewport* vp) {
         Sprite* s = new Sprite(vp);
         s->initDynAttribs();
-        s->getBitmap();
 		return s;
 	}
 	BINDING_DESTRUCTOR(Sprite)

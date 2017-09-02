@@ -395,7 +395,6 @@ static void ffiBindingExecute() {
 
         return;
     }
-
     rb_eval_string_protect(reinterpret_cast<const char*>(run_mkxp_rb), &state);
 
     if(state) {

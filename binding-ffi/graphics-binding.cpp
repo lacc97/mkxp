@@ -15,6 +15,8 @@ extern "C" {
 	BINDING_MODULE_PROPERTY(Graphics, graphics, int, FrameRate, FrameRate)
 	BINDING_MODULE_PROPERTY(Graphics, graphics, int, FrameCount, FrameCount)
 	BINDING_MODULE_PROPERTY(Graphics, graphics, int, Brightness, Brightness)
+    BINDING_MODULE_PROPERTY(Graphics, graphics, int, Fullscreen, Fullscreen)
+    BINDING_MODULE_PROPERTY(Graphics, graphics, int, ShowCursor, ShowCursor)
 	
 	void mkxpGraphicsUpdate() {
 		shState->graphics().update();
@@ -37,7 +39,7 @@ extern "C" {
 	}
 	
 	void mkxpGraphicsTransition(int duration, const char* filename, int vague) {
-		shState->graphics().transition(duration, filename, vague);
+		shState->graphics().transition(duration, filename ? filename : "", vague);
 	}
 	
 	Bitmap* mkxpGraphicsSnapToBitmap() {
