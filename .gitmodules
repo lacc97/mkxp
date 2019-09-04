@@ -1,0 +1,6 @@
+[submodule "lib/win32api"]
+	path = lib/win32api
+	url = https://github.com/lacc97/mkxp-win32.git
+[submodule "lib/SDL_Sound"]
+	path = lib/SDL_Sound
+	url = https://github.com/lacc97/SDL_sound

@@ -191,6 +191,16 @@ static void setupWindowIcon(const Config &conf, SDL_Window *win)
 	}
 }
 
+#include "win32.h"
+
+namespace {
+    SDL_Window* s_GameWindow;
+}
+
+[[gnu::visibility("default")]] SDL_Window* getMkxpWindow() {
+    return s_GameWindow;
+}
+
 int main(int argc, char *argv[])
 {
 	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
@@ -284,6 +294,8 @@ int main(int argc, char *argv[])
 		showInitError(std::string("Error creating window: ") + SDL_GetError());
 		return 0;
 	}
+
+	s_GameWindow = win; kernel32_GetLastError();
 
 	/* OSX and Windows have their own native ways of
 	 * dealing with icons; don't interfere with them */

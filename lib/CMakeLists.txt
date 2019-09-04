@@ -1,0 +1,2 @@
+add_subdirectory(SDL_Sound)
+add_subdirectory(win32api)
