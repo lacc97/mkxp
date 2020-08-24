@@ -90,7 +90,6 @@ pkg_check_modules(VORBISFILE    REQUIRED vorbisfile)
 pkg_check_modules(SDL2          REQUIRED sdl2)
 pkg_check_modules(SDL2_TTF      REQUIRED SDL2_ttf)
 pkg_check_modules(SDL2_IMAGE    REQUIRED SDL2_image)
-pkg_check_modules(SDL_SOUND     REQUIRED SDL_sound)
 
 find_package(Boost 1.49 COMPONENTS program_options REQUIRED)
 find_package(OpenAL REQUIRED)
@@ -294,8 +293,13 @@ source_group("Embedded Source" FILES ${EMBEDDED_INPUT} ${EMBEDDED_SOURCE})
 ## Setup binding source ##
 
 if (BINDING STREQUAL "MRI")
-	set(MRIVERSION "2.1" CACHE STRING "Version of MRI to link with")
-	pkg_check_modules(MRI REQUIRED ruby-${MRIVERSION})
+	set(MRIVERSION "1.8" CACHE STRING "Version of MRI to link with")
+	if(MRIVERSION STREQUAL "1.8")
+		add_subdirectory(lib/ruby-1.8)
+		set(MRI_LIBRARIES ruby)
+	else()
+		pkg_check_modules(MRI REQUIRED ruby-${MRIVERSION})
+	endif()
 	list(APPEND DEFINES
 		BINDING_MRI
 	)
@@ -429,7 +433,7 @@ target_link_libraries(${PROJECT_NAME}
 	${SDL2_LIBRARIES}
 	${SDL2_IMAGE_LIBRARIES}
 	${SDL2_TTF_LIBRARIES}
-	${SDL_SOUND_LIBRARIES}
+	SDL_sound-static
 	${PHYSFS_LIBRARIES}
 	${PIXMAN_LIBRARIES}
 	${Boost_LIBRARIES}
@@ -443,3 +447,5 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 PostBuildMacBundle(${PROJECT_NAME} "" "${PLATFORM_COPY_LIBS}")
+
+add_subdirectory(lib/SDL_Sound)

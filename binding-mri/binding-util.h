@@ -80,7 +80,9 @@ NORETURN(void rb_error_arity(int, int, int));
 
 #define RTYPEDDATA_DATA DATA_PTR
 
-#define RFLOAT_VALUE(d) RFLOAT(d)->value
+#ifndef RFLOAT_VALUE
+# define RFLOAT_VALUE(d) RFLOAT(d)->value
+#endif
 
 #define ENCODING_INLINE_MAX 127
 #define ENCODING_SHIFT (FL_USHIFT+10)
