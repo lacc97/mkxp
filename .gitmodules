@@ -2,3 +2,7 @@
 	path = lib/ruby-1.8
 	url = https://github.com/lacc97/ruby
 	branch = mkxp-1.8
+[submodule "lib/ruby-1.9"]
+	path = lib/ruby-1.9
+	url = https://github.com/lacc97/ruby
+	branch = mkxp-1.9
