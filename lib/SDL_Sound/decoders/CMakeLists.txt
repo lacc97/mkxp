@@ -1,0 +1,40 @@
+set(SDL_SOUND_DECODER_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/aiff.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/au.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/coreaudio.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/flac.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/midi.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/mikmod.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/modplug.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/mpg123.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ogg.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/raw.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shn.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/speex.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/common.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/instrum.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/instrum_dls.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/mix.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/output.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/playmidi.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/readmidi.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/resample.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/tables.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/testmidi.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity/timidity.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/voc.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/wav.c")
+
+target_include_directories(SDL_sound
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity")
+target_sources(SDL_sound
+    PRIVATE
+        ${SDL_SOUND_DECODER_SOURCES})
+
+target_include_directories(SDL_sound-static
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/timidity")
+target_sources(SDL_sound-static
+    PRIVATE
+        ${SDL_SOUND_DECODER_SOURCES})
