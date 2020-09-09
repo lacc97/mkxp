@@ -332,6 +332,7 @@ if (BINDING STREQUAL "MRI")
 		binding-mri/audio-binding.cpp
 		binding-mri/module_rpg.cpp
 		binding-mri/filesystem-binding.cpp
+		binding-mri/win32-binding.cpp
 		binding-mri/windowvx-binding.cpp
 		binding-mri/tilemapvx-binding.cpp
 	)
@@ -447,6 +448,7 @@ target_link_libraries(${PROJECT_NAME}
 	${ZLIB_LIBRARY}
 
 	${PLATFORM_LIBRARIES}
+	${CMAKE_DL_LIBS}
 )
 
 PostBuildMacBundle(${PROJECT_NAME} "" "${PLATFORM_COPY_LIBS}")

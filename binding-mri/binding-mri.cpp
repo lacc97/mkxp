@@ -59,6 +59,7 @@ ScriptBinding scriptBindingImpl =
 
 ScriptBinding *scriptBinding = &scriptBindingImpl;
 
+void win32BindingInit();
 void tableBindingInit();
 void etcBindingInit();
 void fontBindingInit();
@@ -90,6 +91,7 @@ RB_METHOD(_kernelCaller);
 
 static void mriBindingInit()
 {
+        win32BindingInit();
 	tableBindingInit();
 	etcBindingInit();
 	fontBindingInit();
