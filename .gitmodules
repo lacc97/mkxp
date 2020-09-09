@@ -6,3 +6,6 @@
 	path = lib/ruby-1.9
 	url = https://github.com/lacc97/ruby
 	branch = mkxp-1.9
+[submodule "lib/win32api"]
+	path = lib/win32api
+	url = https://github.com/lacc97/mkxp-win32

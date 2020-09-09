@@ -449,8 +449,10 @@ target_link_libraries(${PROJECT_NAME}
 
 	${PLATFORM_LIBRARIES}
 	${CMAKE_DL_LIBS}
+	win32api
 )
 
 PostBuildMacBundle(${PROJECT_NAME} "" "${PLATFORM_COPY_LIBS}")
 
 add_subdirectory(lib/SDL_Sound)
+add_subdirectory(lib/win32api)

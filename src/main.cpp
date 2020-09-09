@@ -191,6 +191,10 @@ static void setupWindowIcon(const Config &conf, SDL_Window *win)
 	}
 }
 
+namespace mkxp {
+  void setWindow(SDL_Window* win) noexcept;
+}
+
 int main(int argc, char *argv[])
 {
 	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
@@ -284,6 +288,8 @@ int main(int argc, char *argv[])
 		showInitError(std::string("Error creating window: ") + SDL_GetError());
 		return 0;
 	}
+
+  mkxp::setWindow(win);
 
 	/* OSX and Windows have their own native ways of
 	 * dealing with icons; don't interfere with them */
