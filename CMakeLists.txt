@@ -1,7 +1,9 @@
-cmake_minimum_required(VERSION 2.8.11)
-Project(mkxp)
+cmake_minimum_required(VERSION 3.15)
+project(mkxp)
 
-## Setup options ##
+
+include(GNUInstallDirs)
+
 
 option(SHARED_FLUID "Dynamically link fluidsynth at build time" OFF)
 option(WORKDIR_CURRENT "Keep current directory on startup" OFF)
@@ -9,450 +11,355 @@ option(FORCE32 "Force 32bit compile on 64bit OS" OFF)
 set(BINDING "MRI" CACHE STRING "The Binding Type (MRI, MRUBY, NULL)")
 set(EXTERNAL_LIB_PATH "" CACHE PATH "External precompiled lib prefix")
 
-## Misc setup ##
-
-include(cmake/PrepUtils.cmake)
-
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-IF("${CMAKE_SYSTEM}" MATCHES "Linux")
-	SET(LINUX ON)
-ENDIF()
-
-IF(WORKDIR_CURRENT)
-	list(APPEND DEFINES
-		WORKDIR_CURRENT
-	)
-ENDIF()
-
-IF(FORCE32)
-	if(APPLE)
-		SET(CMAKE_OSX_ARCHITECTURES "i386")
-	else()
-		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
-		SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
-	endif()
-ENDIF()
-
-set(CMAKE_OSX_DEPLOYMENT_TARGET 10.6)
-
-IF(LINUX)
-	if(CMAKE_SIZEOF_VOID_P MATCHES "8" AND NOT(FORCE32) )
-		set(CMAKE_EXECUTABLE_SUFFIX ".bin.x86_64")
-		set(BIN_RPATH "\$ORIGIN/lib64")
-		set(LIB_PATH "lib64")
-	else()
-		set(CMAKE_EXECUTABLE_SUFFIX ".bin.x86")
-		set(BIN_RPATH "\$ORIGIN/lib")
-		set(LIB_PATH "lib")
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_FILE_OFFSET_BITS=64")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_FILE_OFFSET_BITS=64")
-	endif()
-elseif(APPLE)
-	SET(BIN_RPATH "@executable_path/../Frameworks")
-	set(LIB_PATH "lib")
-endif()
-
-set(CMAKE_SKIP_BUILD_RPATH TRUE)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-set(CMAKE_INSTALL_RPATH ${BIN_RPATH})
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
-
-## Locate core libs ##
 
 find_package(PkgConfig REQUIRED)
 
-if (EXTERNAL_LIB_PATH)
-	set(CMAKE_PREFIX_PATH ${EXTERNAL_LIB_PATH})
-	
-	if(EXISTS "${EXTERNAL_LIB_PATH}/${LIB_PATH}/pkgconfig/")
-		SET(ENV{PKG_CONFIG_PATH} "${EXTERNAL_LIB_PATH}/${LIB_PATH}/pkgconfig/")
-	endif()
-	if(APPLE)
-		set(PLATFORM_SHARED_LIBS 
-			libSDL2.dylib libSDL2_image-2.0.0.dylib libSDL2_ttf-2.0.0.dylib libSDL_sound-1.0.1.dylib
-			libfreetype.6.dylib libsigc-2.0.0.dylib
-			CACHE STRING "List of shared libraries that need to be copied into the OS X bundle")
-		foreach(lib ${PLATFORM_SHARED_LIBS})
-			if(EXISTS ${EXTERNAL_LIB_PATH}/lib/${lib})
-				list(APPEND PLATFORM_COPY_LIBS
-					${EXTERNAL_LIB_PATH}/lib/${lib}
-				)
-			endif()
-		endforeach()
-	endif()
-endif()
+if(EXTERNAL_LIB_PATH)
+  set(CMAKE_PREFIX_PATH ${EXTERNAL_LIB_PATH})
 
-pkg_check_modules(SIGCXX        REQUIRED sigc++-2.0)
-pkg_check_modules(PIXMAN        REQUIRED pixman-1)
-pkg_check_modules(PHYSFS        REQUIRED physfs>=2.1)
-pkg_check_modules(VORBISFILE    REQUIRED vorbisfile)
-pkg_check_modules(SDL2          REQUIRED sdl2)
-pkg_check_modules(SDL2_TTF      REQUIRED SDL2_ttf)
-pkg_check_modules(SDL2_IMAGE    REQUIRED SDL2_image)
+  if(EXISTS "${EXTERNAL_LIB_PATH}/${LIB_PATH}/pkgconfig/")
+    set(ENV{PKG_CONFIG_PATH} "${EXTERNAL_LIB_PATH}/${LIB_PATH}/pkgconfig/")
+  endif()
+endif()
 
 find_package(Boost 1.49 COMPONENTS program_options REQUIRED)
-find_package(OpenAL REQUIRED)
-find_package(ZLIB REQUIRED)
 
-## Setup main source ##
+pkg_check_modules(openal REQUIRED IMPORTED_TARGET openal)
+pkg_check_modules(physfs REQUIRED IMPORTED_TARGET physfs>=2.1)
+pkg_check_modules(pixman REQUIRED IMPORTED_TARGET pixman-1)
+pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+pkg_check_modules(SDL2_image REQUIRED IMPORTED_TARGET SDL2_image)
+pkg_check_modules(SDL2_ttf REQUIRED IMPORTED_TARGET SDL2_ttf)
+pkg_check_modules(sigcxx REQUIRED IMPORTED_TARGET sigc++-2.0)
+pkg_check_modules(vorbisfile REQUIRED IMPORTED_TARGET vorbisfile)
+pkg_check_modules(zlib REQUIRED IMPORTED_TARGET zlib)
 
-set(MAIN_HEADERS
-	src/quadarray.h
-	src/audio.h
-	src/binding.h
-	src/bitmap.h
-	src/disposable.h
-	src/etc.h
-	src/etc-internal.h
-	src/eventthread.h
-	src/flashable.h
-	src/font.h
-	src/input.h
-	src/iniconfig.h
-	src/plane.h
-	src/scene.h
-	src/sprite.h
-	src/table.h
-	src/texpool.h
-	src/tilequad.h
-	src/transform.h
-	src/viewport.h
-	src/window.h
-	src/serializable.h
-	src/shader.h
-	src/glstate.h
-	src/quad.h
-	src/tilemap.h
-	src/tilemap-common.h
-	src/graphics.h
-	src/gl-debug.h
-	src/global-ibo.h
-	src/exception.h
-	src/filesystem.h
-	src/serial-util.h
-	src/intrulist.h
-	src/binding.h
-	src/gl-util.h
-	src/util.h
-	src/config.h
-	src/settingsmenu.h
-	src/keybindings.h
-	src/tileatlas.h
-	src/sharedstate.h
-	src/al-util.h
-	src/boost-hash.h
-	src/debugwriter.h
-	src/gl-fun.h
-	src/gl-meta.h
-	src/vertex.h
-	src/soundemitter.h
-	src/aldatasource.h
-	src/alstream.h
-	src/audiostream.h
-	src/rgssad.h
-	src/windowvx.h
-	src/tilemapvx.h
-	src/tileatlasvx.h
-	src/sharedmidistate.h
-	src/fluid-fun.h
-	src/sdl-util.h
-)
-
-set(MAIN_SOURCE
-	src/main.cpp
-	src/audio.cpp
-	src/bitmap.cpp
-	src/eventthread.cpp
-	src/filesystem.cpp
-	src/font.cpp
-	src/input.cpp
-	src/iniconfig.cpp
-	src/plane.cpp
-	src/scene.cpp
-	src/sprite.cpp
-	src/table.cpp
-	src/tilequad.cpp
-	src/viewport.cpp
-	src/window.cpp
-	src/texpool.cpp
-	src/shader.cpp
-	src/glstate.cpp
-	src/tilemap.cpp
-	src/autotiles.cpp
-	src/graphics.cpp
-	src/gl-debug.cpp
-	src/etc.cpp
-	src/config.cpp
-	src/settingsmenu.cpp
-	src/keybindings.cpp
-	src/tileatlas.cpp
-	src/sharedstate.cpp
-	src/gl-fun.cpp
-	src/gl-meta.cpp
-	src/vertex.cpp
-	src/soundemitter.cpp
-	src/sdlsoundsource.cpp
-	src/alstream.cpp
-	src/audiostream.cpp
-	src/rgssad.cpp
-	src/bundledfont.cpp
-	src/vorbissource.cpp
-	src/windowvx.cpp
-	src/tilemapvx.cpp
-	src/tileatlasvx.cpp
-	src/autotilesvx.cpp
-	src/midisource.cpp
-	src/fluid-fun.cpp
-)
-
-if(WIN32)
-	list(APPEND MAIN_HEADERS windows/resource.h)
-	list(APPEND MAIN_SOURCE windows/resource.rc)
+if(SHARED_FLUID)
+  pkg_check_modules(fluidsynth REQUIRED IMPORTED_TARGET fluidsynth)
 endif()
 
-source_group("MKXP Source" FILES ${MAIN_SOURCE} ${MAIN_HEADERS})
-
-## Setup embedded source ##
 
 set(EMBEDDED_INPUT
-	shader/common.h
-	shader/transSimple.frag
-	shader/trans.frag
-	shader/hue.frag
-	shader/sprite.frag
-	shader/plane.frag
-	shader/gray.frag
-	shader/bitmapBlit.frag
-	shader/flatColor.frag
-	shader/simple.frag
-	shader/simpleColor.frag
-	shader/simpleAlpha.frag
-	shader/simpleAlphaUni.frag
-	shader/flashMap.frag
-	shader/minimal.vert
-	shader/simple.vert
-	shader/simpleColor.vert
-	shader/sprite.vert
-	shader/tilemap.vert
-	shader/tilemapvx.vert
-	shader/blur.frag
-	shader/blurH.vert
-	shader/blurV.vert
-	shader/simpleMatrix.vert
-	assets/liberation.ttf
-	assets/icon.png
-)
-
-if (RGSS2)
-	list(APPEND DEFINES
-		RGSS2
-	)
-endif()
-
-if (SHARED_FLUID)
-	pkg_check_modules(FLUID REQUIRED fluidsynth)
-	list(APPEND DEFINES
-		SHARED_FLUID
-	)
-endif()
-
-## Process Embeddeds ##
+    shader/common.h
+    shader/transSimple.frag
+    shader/trans.frag
+    shader/hue.frag
+    shader/sprite.frag
+    shader/plane.frag
+    shader/gray.frag
+    shader/bitmapBlit.frag
+    shader/flatColor.frag
+    shader/simple.frag
+    shader/simpleColor.frag
+    shader/simpleAlpha.frag
+    shader/simpleAlphaUni.frag
+    shader/flashMap.frag
+    shader/minimal.vert
+    shader/simple.vert
+    shader/simpleColor.vert
+    shader/sprite.vert
+    shader/tilemap.vert
+    shader/tilemapvx.vert
+    shader/blur.frag
+    shader/blurH.vert
+    shader/blurV.vert
+    shader/simpleMatrix.vert
+    assets/liberation.ttf
+    assets/icon.png)
 
 find_program(XXD_EXE xxd
-	DOC "Location of the xxd executable"
-)
+    DOC "Location of the xxd executable")
 
-macro(ProcessWithXXD outvar inputfile outdir)
-	get_filename_component(basefile ${inputfile} NAME)
-	set(outputfile ${outdir}/${basefile}.xxd)
-	set_source_files_properties(${outputfile} PROPERTIES HEADER_ONLY TRUE)
-	add_custom_command(
-		OUTPUT ${outputfile}
-		COMMAND ${XXD_EXE} -i ${inputfile} ${outputfile}
-		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-		DEPENDS ${inputfile}
-		COMMENT "Generating XXD for ${inputfile}"
-	)
-	list(APPEND ${outvar}
-		${outputfile}
-	)
+macro(processwithxxd outvar inputfile outdir)
+  get_filename_component(basefile ${inputfile} NAME)
+  set(outputfile ${outdir}/${basefile}.xxd)
+  set_source_files_properties(${outputfile} PROPERTIES HEADER_ONLY TRUE)
+  add_custom_command(OUTPUT ${outputfile}
+      COMMAND ${XXD_EXE} -i ${inputfile} ${outputfile}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMENT "Generating XXD for ${inputfile}")
+  list(APPEND ${outvar}
+      ${outputfile})
 endmacro()
 
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/xxdhack)
-include_directories(
-	${CMAKE_CURRENT_BINARY_DIR}/xxdhack
-)
-
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/xxd)
 foreach(item ${EMBEDDED_INPUT})
-	ProcessWithXXD(EMBEDDED_SOURCE ${item} ${CMAKE_CURRENT_BINARY_DIR})
+  processwithxxd(EMBEDDED_SRCS ${item} ${CMAKE_CURRENT_BINARY_DIR}/xxd)
 endforeach()
 
-source_group("Embedded Source" FILES ${EMBEDDED_INPUT} ${EMBEDDED_SOURCE})
+source_group("Embedded Source" FILES ${EMBEDDED_INPUT} ${EMBEDDED_SRCS})
 
-## Setup binding source ##
 
-if (BINDING STREQUAL "MRI")
-	set(MRIVERSION "1.8" CACHE STRING "Version of MRI to link with")
-	if(MRIVERSION STREQUAL "1.8")
-		add_subdirectory(lib/ruby-1.8)
-		set(MRI_LIBRARIES ruby)
-	elseif(MRIVERSION STREQUAL "1.9")
-		add_subdirectory(lib/ruby-1.9)
-		set(MRI_LIBRARIES ruby)
-	else()
-		pkg_check_modules(MRI REQUIRED ruby-${MRIVERSION})
-	endif()
-	list(APPEND DEFINES
-		BINDING_MRI
-	)
-	set(BINDING_HEADERS
-		binding-mri/binding-util.h
-		binding-mri/binding-types.h
-		binding-mri/serializable-binding.h
-		binding-mri/disposable-binding.h
-		binding-mri/sceneelement-binding.h
-		binding-mri/viewportelement-binding.h
-		binding-mri/flashable-binding.h
-	)
-	set(BINDING_SOURCE
-		binding-mri/binding-mri.cpp
-		binding-mri/binding-util.cpp
-		binding-mri/table-binding.cpp
-		binding-mri/etc-binding.cpp
-		binding-mri/bitmap-binding.cpp
-		binding-mri/font-binding.cpp
-		binding-mri/graphics-binding.cpp
-		binding-mri/input-binding.cpp
-		binding-mri/sprite-binding.cpp
-		binding-mri/viewport-binding.cpp
-		binding-mri/plane-binding.cpp
-		binding-mri/window-binding.cpp
-		binding-mri/tilemap-binding.cpp
-		binding-mri/audio-binding.cpp
-		binding-mri/module_rpg.cpp
-		binding-mri/filesystem-binding.cpp
-		binding-mri/win32-binding.cpp
-		binding-mri/windowvx-binding.cpp
-		binding-mri/tilemapvx-binding.cpp
-	)
+if(BINDING STREQUAL "MRI")
+  set(MRIVERSION "1.8" CACHE STRING "Version of MRI to link with")
+  if(MRIVERSION STREQUAL "1.8")
+    add_subdirectory(lib/ruby-1.8)
+    set(MRI_LIBRARIES ruby)
+    add_library(ruby::ruby ALIAS ruby)
+  elseif(MRIVERSION STREQUAL "1.9")
+    add_subdirectory(lib/ruby-1.9)
+    add_library(ruby::ruby ALIAS ruby)
+  else()
+    pkg_check_modules(MRI REQUIRED IMPORTED_TARGET ruby-${MRIVERSION})
+    add_library(ruby::ruby ALIAS PkgConfig::MRI)
+  endif()
+
+  set(BINDING_HDRS
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/binding-util.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/binding-types.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/serializable-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/disposable-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/sceneelement-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/viewportelement-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/flashable-binding.h)
+
+  set(BINDING_SRCS
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/binding-mri.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/binding-util.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/table-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/etc-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/bitmap-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/font-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/graphics-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/input-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/sprite-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/viewport-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/plane-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/window-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/tilemap-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/audio-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/module_rpg.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/filesystem-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/windowvx-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/tilemapvx-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/win32-binding.cpp)
+
+  add_library(ruby_binding INTERFACE)
+    target_compile_definitions(ruby_binding
+        INTERFACE
+          BINDING_MRI)
+    target_sources(ruby_binding
+        INTERFACE
+          ${BINDING_HDRS} ${BINDING_SRCS})
+    target_link_libraries(ruby_binding
+        INTERFACE
+          ruby::ruby
+          ${CMAKE_DL_LIBS})
 elseif(BINDING STREQUAL "MRUBY")
-	message(FATAL_ERROR "Mruby support in CMake needs to be finished")
-	list(APPEND DEFINES
-		BINDING_MRUBY
-	)
-	set(BINDING_HEADERS
-		binding-mruby/binding-util.h
-		binding-mruby/disposable-binding.h
-		binding-mruby/flashable-binding.h
-		binding-mruby/binding-types.h
-		binding-mruby/sceneelement-binding.h
-		binding-mruby/viewportelement-binding.h
-		binding-mruby/serializable-binding.h
-		binding-mruby/mrb-ext/file.h
-		binding-mruby/mrb-ext/rwmem.h
-		binding-mruby/mrb-ext/marshal.h
-	)
-	set(BINDING_SOURCE
-		binding-mruby/binding-mruby.cpp
-		binding-mruby/binding-util.cpp
-		binding-mruby/window-binding.cpp
-		binding-mruby/bitmap-binding.cpp
-		binding-mruby/sprite-binding.cpp
-		binding-mruby/font-binding.cpp
-		binding-mruby/viewport-binding.cpp
-		binding-mruby/plane-binding.cpp
-		binding-mruby/audio-binding.cpp
-		binding-mruby/tilemap-binding.cpp
-		binding-mruby/etc-binding.cpp
-		binding-mruby/graphics-binding.cpp
-		binding-mruby/input-binding.cpp
-		binding-mruby/table-binding.cpp
-		binding-mruby/module_rpg.c
-		binding-mruby/mrb-ext/file.cpp
-		binding-mruby/mrb-ext/marshal.cpp
-		binding-mruby/mrb-ext/rwmem.cpp
-		binding-mruby/mrb-ext/kernel.cpp
-		binding-mruby/mrb-ext/time.cpp
-	)
+  message(FATAL_ERROR "Mruby support in CMake needs to be finished")
+
+  set(BINDING_HDRS
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/binding-util.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/disposable-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/flashable-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/binding-types.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/sceneelement-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/viewportelement-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/serializable-binding.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/file.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/rwmem.h
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/marshal.h)
+
+  set(BINDING_SRCS
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/binding-mruby.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/binding-util.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/window-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/bitmap-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/sprite-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/font-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/viewport-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/plane-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/audio-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/tilemap-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/etc-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/graphics-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/input-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/table-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/module_rpg.c
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/file.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/marshal.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/rwmem.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/kernel.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mruby/mrb-ext/time.cpp)
+
+  add_library(ruby_binding INTERFACE)
+    target_compile_definitions(ruby_binding
+        INTERFACE
+          BINDING_MRUBY)
+    target_sources(ruby_binding
+        INTERFACE
+          ${BINDING_HDRS} ${BINDING_SRCS})
 elseif(BINDING STREQUAL "NULL")
-	set(BINDING_SOURCE
-		binding-null/binding-null.cpp
-	)
+  set(BINDING_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/binding-null/binding-null.cpp)
+
+  add_library(ruby_binding INTERFACE)
+    target_sources(ruby_binding
+        INTERFACE
+          ${BINDING_SRCS})
 else()
-	message(FATAL_ERROR "Must choose a valid binding type.  MRI, MRUBY, or NULL")
+  message(FATAL_ERROR "Must choose a valid binding type.  MRI, MRUBY, or NULL")
 endif()
 
 source_group("Binding Source" FILES ${BINDING_SOURCE} ${BINDING_HEADERS})
 
-## Setup main executable ##
 
-if(APPLE)
-	find_library(CARBON_LIBRARY Carbon)
-	find_library(IOKIT_LIBRARY IOKit)
-	mark_as_advanced(CARBON_LIBRARY IOKIT_LIBRARY)
-	list(APPEND PLATFORM_LIBRARIES
-		${CARBON_LIBRARY}
-		${IOKIT_LIBRARY}
-		"-liconv"
-	)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  if(CMAKE_SIZEOF_VOID_P MATCHES "8" AND NOT (FORCE32))
+    set(MKXP_SUFFIX ".bin.x86_64")
+  else()
+    set(MKXP_SUFFIX ".bin.x86")
+  endif()
 endif()
 
-link_directories(
-	${SIGCXX_LIBRARY_DIRS}
-	${PIXMAN_LIBRARY_DIRS}
-	${PHYSFS_LIBRARY_DIRS}
-	${SDL2_LIBRARY_DIRS} # Blindly assume other SDL bits are in same directory
-	${Boost_LIBRARY_DIR}
-	${MRI_LIBDIR}
-)
+set(MAIN_HDRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/quadarray.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/audio.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/binding.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/bitmap.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/disposable.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/etc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/etc-internal.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/eventthread.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/flashable.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/font.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/input.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/iniconfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/plane.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/scene.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sprite.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/table.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/texpool.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilequad.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/transform.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/window.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/serializable.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/shader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/glstate.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/quad.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilemap.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilemap-common.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/graphics.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-debug.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/global-ibo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/exception.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/filesystem.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/serial-util.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/intrulist.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/binding.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-util.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/config.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/settingsmenu.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/keybindings.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tileatlas.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sharedstate.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/al-util.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/boost-hash.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/debugwriter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-fun.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-meta.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vertex.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/soundemitter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/aldatasource.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/alstream.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/audiostream.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/rgssad.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/windowvx.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilemapvx.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tileatlasvx.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sharedmidistate.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/fluid-fun.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl-util.h
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/windows/resource.h>)
 
-add_executable(${PROJECT_NAME} MACOSX_BUNDLE
-	${MAIN_HEADERS}
-	${MAIN_SOURCE}
-	${BINDING_HEADERS}
-	${BINDING_SOURCE}
-	${EMBEDDED_SOURCE}
-)
+set(MAIN_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/audio.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/bitmap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/eventthread.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/filesystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/font.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/input.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/iniconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/plane.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/scene.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sprite.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/table.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilequad.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/texpool.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/shader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/glstate.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilemap.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/autotiles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/graphics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-debug.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/etc.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/settingsmenu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/keybindings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tileatlas.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sharedstate.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-fun.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-meta.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vertex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/soundemitter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sdlsoundsource.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/alstream.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/audiostream.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/rgssad.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/bundledfont.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vorbissource.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/windowvx.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tilemapvx.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tileatlasvx.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/autotilesvx.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/midisource.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/fluid-fun.cpp
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/windows/resource.rc>)
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-	${DEFINES}
-)
-target_include_directories(${PROJECT_NAME} PRIVATE
-	src
-	windows
-	${SIGCXX_INCLUDE_DIRS}
-	${PIXMAN_INCLUDE_DIRS}
-	${PHYSFS_INCLUDE_DIRS}
-	${SDL2_INCLUDE_DIRS} # Blindly assume other SDL bits are in same directory
-	${Boost_INCLUDE_DIR}
-	${MRI_INCLUDE_DIRS}
-	${VORBISFILE_INCLUDE_DIRS}
-	${FLUID_INCLUDE_DIRS}
-	${OPENAL_INCLUDE_DIR}
-)
+source_group("MKXP Source" FILES ${MAIN_SOURCE} ${MAIN_HEADERS})
 
-target_link_libraries(${PROJECT_NAME}
-	${SIGCXX_LIBRARIES}
-	${SDL2_LIBRARIES}
-	${SDL2_IMAGE_LIBRARIES}
-	${SDL2_TTF_LIBRARIES}
-	SDL_sound-static
-	${PHYSFS_LIBRARIES}
-	${PIXMAN_LIBRARIES}
-	${Boost_LIBRARIES}
-	${MRI_LIBRARIES}
-	${VORBISFILE_LIBRARIES}
-	${FLUID_LIBRARIES}
-	${OPENAL_LIBRARY}
-	${ZLIB_LIBRARY}
+add_executable(mkxp ${EMBEDDED_SRCS} ${MAIN_HDRS} ${MAIN_SRCS})
+  set_target_properties(mkxp PROPERTIES
+      OUTPUT_NAME mkxp${MKXP_SUFFIX}
+      CXX_VISIBILITY_PRESET hidden
+      INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/mkxp)
+  target_compile_definitions(mkxp
+      PRIVATE
+        $<$<PLATFORM_ID:Linux>:_FILE_OFFSET_BITS=64>
+        $<$<BOOL:${RGSS2}>:RGSS2>
+        $<$<BOOL:${SHARED_FLUID}>:SHARED_FLUID>
+        $<$<BOOL:${WORKDIR_CURRENT}>:WORKDIR_CURRENT>)
+  target_include_directories(mkxp
+      PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/windows
+        ${CMAKE_CURRENT_BINARY_DIR}/xxd)
+  target_link_libraries(mkxp
+      PRIVATE
+        Boost::boost
+        Boost::program_options
+        PkgConfig::openal
+        PkgConfig::physfs
+        PkgConfig::pixman
+        PkgConfig::SDL2 PkgConfig::SDL2_image PkgConfig::SDL2_ttf
+        PkgConfig::sigcxx
+        PkgConfig::vorbisfile
+        PkgConfig::zlib
+        $<$<BOOL:${SHARED_FLUID}>:PkgConfig::fluidsynth>
+        SDL_sound-static win32api
+        ruby_binding)
 
-	${PLATFORM_LIBRARIES}
-	${CMAKE_DL_LIBS}
-	win32api
-)
-
-PostBuildMacBundle(${PROJECT_NAME} "" "${PLATFORM_COPY_LIBS}")
 
 add_subdirectory(lib/SDL_Sound)
 add_subdirectory(lib/win32api)
+
+
+install(TARGETS mkxp win32api
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/mkxp)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib/win32api/win32.rb
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/mkxp)
