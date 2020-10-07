@@ -4,11 +4,22 @@
 
 #include <string>
 
+#include <fmt/format.h>
+
 #include <ruby.h>
+
+#include <unicodestring.hpp>
 
 #include "binding-util.h"
 
 namespace {
+  inline bool ends_with(unicode::string_view sv, unicode::string_view pattern) noexcept {
+    if(pattern.size() > sv.size())
+      return false;
+
+    return sv.substr(sv.size() - pattern.size()) == pattern;
+  }
+
   namespace rb {
     using func_type = VALUE (*)(...);
 
@@ -84,7 +95,7 @@ namespace {
   class win32_function {
    public:
     using param_type = long;
-    using proc_type  = param_type (*)(...);
+    using proc_type = param_type (*)(...);
 
     struct info {
       bool return_void;
@@ -256,18 +267,18 @@ namespace {
     }
 
    private:
-    using actual_void_proc_type0  = void (*)();
-    using actual_void_proc_type1  = void (*)(param_type);
-    using actual_void_proc_type2  = void (*)(param_type, param_type);
-    using actual_void_proc_type3  = void (*)(param_type, param_type, param_type);
-    using actual_void_proc_type4  = void (*)(param_type, param_type, param_type, param_type);
-    using actual_void_proc_type5  = void (*)(param_type, param_type, param_type, param_type, param_type);
-    using actual_void_proc_type6  = void (*)(param_type, param_type, param_type, param_type, param_type, param_type);
-    using actual_void_proc_type7  = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
+    using actual_void_proc_type0 = void (*)();
+    using actual_void_proc_type1 = void (*)(param_type);
+    using actual_void_proc_type2 = void (*)(param_type, param_type);
+    using actual_void_proc_type3 = void (*)(param_type, param_type, param_type);
+    using actual_void_proc_type4 = void (*)(param_type, param_type, param_type, param_type);
+    using actual_void_proc_type5 = void (*)(param_type, param_type, param_type, param_type, param_type);
+    using actual_void_proc_type6 = void (*)(param_type, param_type, param_type, param_type, param_type, param_type);
+    using actual_void_proc_type7 = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                             param_type);
-    using actual_void_proc_type8  = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
+    using actual_void_proc_type8 = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                             param_type, param_type);
-    using actual_void_proc_type9  = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
+    using actual_void_proc_type9 = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                             param_type, param_type, param_type);
     using actual_void_proc_type10 = void (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                              param_type, param_type, param_type, param_type);
@@ -288,18 +299,18 @@ namespace {
                                              param_type, param_type, param_type, param_type, param_type, param_type,
                                              param_type, param_type, param_type, param_type);
 
-    using actual_proc_type0  = param_type (*)();
-    using actual_proc_type1  = param_type (*)(param_type);
-    using actual_proc_type2  = param_type (*)(param_type, param_type);
-    using actual_proc_type3  = param_type (*)(param_type, param_type, param_type);
-    using actual_proc_type4  = param_type (*)(param_type, param_type, param_type, param_type);
-    using actual_proc_type5  = param_type (*)(param_type, param_type, param_type, param_type, param_type);
-    using actual_proc_type6  = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type);
-    using actual_proc_type7  = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
+    using actual_proc_type0 = param_type (*)();
+    using actual_proc_type1 = param_type (*)(param_type);
+    using actual_proc_type2 = param_type (*)(param_type, param_type);
+    using actual_proc_type3 = param_type (*)(param_type, param_type, param_type);
+    using actual_proc_type4 = param_type (*)(param_type, param_type, param_type, param_type);
+    using actual_proc_type5 = param_type (*)(param_type, param_type, param_type, param_type, param_type);
+    using actual_proc_type6 = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type);
+    using actual_proc_type7 = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                              param_type);
-    using actual_proc_type8  = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
+    using actual_proc_type8 = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                              param_type, param_type);
-    using actual_proc_type9  = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
+    using actual_proc_type9 = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                              param_type, param_type, param_type);
     using actual_proc_type10 = param_type (*)(param_type, param_type, param_type, param_type, param_type, param_type,
                                               param_type, param_type, param_type, param_type);
@@ -327,11 +338,20 @@ namespace {
     SafeStringValue(dllname);
     SafeStringValue(proc);
 
+    bool validDll = false;
     VALUE sym;
     {
-      std::string s = std::string(rb::str_cstr(dllname)) + "_" + std::string(rb::str_cstr(proc));
-      sym           = rb_str_new(s.data(), s.length());
+      auto dllfile = unicode::toLowerCase(utf16(rb::str_cstr(dllname))).value_or(u"");
+      if(ends_with(dllfile, u".dll")) {
+        validDll = true;
+        unicode::string_view dllbasename = dllfile;
+
+        std::string s = fmt::format("{0}_{1}", utf8(dllbasename.substr(0, dllbasename.size() - 4)), rb::str_cstr(proc));
+        sym = rb_str_new(s.data(), s.length());
+      }
     }
+    if(!validDll)
+      rb_raise(rb_eRuntimeError, "invalid argument: %s is not a dll\n", rb::str_cstr(dllname));
     void* procAddr = dlsym(RTLD_DEFAULT, rb::str_cstr(sym));
     if(!procAddr)
       procAddr = dlsym(RTLD_DEFAULT, (std::string(rb::str_cstr(sym)) + "A").c_str());
@@ -424,9 +444,9 @@ namespace {
   }
 
   VALUE Win32API_call(int argc, VALUE* argv, VALUE obj) {
-    VALUE vProc       = rb_iv_get(obj, "__proc__");
+    VALUE vProc = rb_iv_get(obj, "__proc__");
     VALUE vParamsType = rb_iv_get(obj, "__params__");
-    VALUE vRetType    = rb_iv_get(obj, "__return__");
+    VALUE vRetType = rb_iv_get(obj, "__return__");
 
     win32_function fn(reinterpret_cast<void*>(rb::from_num<uintptr_t>(vProc)));
 

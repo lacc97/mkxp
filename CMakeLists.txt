@@ -23,6 +23,7 @@ if(EXTERNAL_LIB_PATH)
 endif()
 
 find_package(Boost 1.49 COMPONENTS program_options REQUIRED)
+find_package(fmt REQUIRED)
 
 pkg_check_modules(openal REQUIRED IMPORTED_TARGET openal)
 pkg_check_modules(physfs REQUIRED IMPORTED_TARGET physfs>=2.1)
@@ -143,7 +144,9 @@ if(BINDING STREQUAL "MRI")
           ${BINDING_HDRS} ${BINDING_SRCS})
     target_link_libraries(ruby_binding
         INTERFACE
+          fmt::fmt
           ruby::ruby
+          unicode
           ${CMAKE_DL_LIBS})
 elseif(BINDING STREQUAL "MRUBY")
   message(FATAL_ERROR "Mruby support in CMake needs to be finished")
