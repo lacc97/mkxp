@@ -410,8 +410,8 @@ namespace {
         }
       } break;
     }
-    if(16 < rb::ary_len(param))
-      rb_raise(rb_eRuntimeError, "too many parameters: %ld\n", rb::ary_len(param));
+    if(16 < rb::ary_len(paramsType))
+      rb_raise(rb_eRuntimeError, "too many parameters: %ld\n", rb::ary_len(paramsType));
     rb_iv_set(self, "__params__", paramsType);
 
     param_type retType = param_type::eVoid;
