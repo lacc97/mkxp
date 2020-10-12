@@ -338,20 +338,16 @@ namespace {
     SafeStringValue(dllname);
     SafeStringValue(proc);
 
-    bool validDll = false;
     VALUE sym;
     {
       auto dllfile = unicode::toLowerCase(utf16(rb::str_cstr(dllname))).value_or(u"");
-      if(ends_with(dllfile, u".dll")) {
-        validDll = true;
-        unicode::string_view dllbasename = dllfile;
+      unicode::string_view dllbasename = dllfile;
+      if(ends_with(dllbasename, u".dll"))
+        dllbasename = dllbasename.substr(0, dllbasename.size() - 4);
 
-        std::string s = fmt::format("{0}_{1}", utf8(dllbasename.substr(0, dllbasename.size() - 4)), rb::str_cstr(proc));
-        sym = rb_str_new(s.data(), s.length());
-      }
+      std::string s = fmt::format("{0}_{1}", utf8(dllbasename), rb::str_cstr(proc));
+      sym = rb_str_new(s.data(), s.length());
     }
-    if(!validDll)
-      rb_raise(rb_eRuntimeError, "invalid argument: %s is not a dll\n", rb::str_cstr(dllname));
     void* procAddr = dlsym(RTLD_DEFAULT, rb::str_cstr(sym));
     if(!procAddr)
       procAddr = dlsym(RTLD_DEFAULT, (std::string(rb::str_cstr(sym)) + "A").c_str());
