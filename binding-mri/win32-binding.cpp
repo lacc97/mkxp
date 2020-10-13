@@ -24,10 +24,10 @@ namespace {
     using func_type = VALUE (*)(...);
 
     size_t ary_len(VALUE v) noexcept {
-#if RUBY_API_VERSION_MAJOR == 1
+#if RUBY_API_VERSION_MAJOR == 1 && RUBY_API_VERSION_MINOR < 9
       return RARRAY(v)->len;
 #else
-      return rb_array_len(v);
+      return RARRAY_LEN(v);
 #endif
     }
 
