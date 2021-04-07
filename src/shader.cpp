@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <string.h>
 #include <iostream>
+#include <sstream>
 
 #include "common.h.xxd"
 #include "sprite.frag.xxd"
@@ -42,6 +43,9 @@
 #include "simpleAlpha.frag.xxd"
 #include "simpleAlphaUni.frag.xxd"
 #include "flashMap.frag.xxd"
+#include "blend.frag.xxd"
+#include "changeTone.frag.xxd"
+#include "invert.frag.xxd"
 #include "minimal.vert.xxd"
 #include "simple.vert.xxd"
 #include "simpleColor.vert.xxd"
@@ -634,4 +638,52 @@ void BltShader::setSubRect(const FloatRect &value)
 void BltShader::setOpacity(float value)
 {
 	gl.Uniform1f(u_opacity, value);
+}
+
+BlendShader::BlendShader(unsigned blendType)
+{
+  std::string fragShader;
+  {
+    std::stringstream ss;
+    ss << "#define BLEND_TYPE " << blendType << '\n';
+    ss << std::string{shader_blend_frag, shader_blend_frag + shader_blend_frag_len};
+
+    fragShader = ss.str();
+  }
+
+  Shader::init(shader_simple_vert, shader_simple_vert_len,
+               reinterpret_cast<const unsigned char*>(fragShader.c_str()), fragShader.length(),
+               "simple", "blend", "BlendShader");
+
+  ShaderBase::init();
+
+  GET_U(sTex);
+  GET_U(sRect);
+  GET_U(dTex);
+  GET_U(dRect);
+  GET_U(opacity);
+}
+
+void BlendShader::setSTex()
+{
+  gl.Uniform1i(u_sTex, 0);
+}
+
+void BlendShader::setSRect(const FloatRect& value)
+{
+  gl.Uniform4f(u_sRect, value.x, value.y, value.w, value.h);
+}
+
+void BlendShader::setDTex(const TEX::ID value)
+{
+  setTexUniform(u_dTex, 1, value);
+}
+
+void BlendShader::setDRect(const FloatRect& value)
+{
+  gl.Uniform4f(u_dRect, value.x, value.y, value.w, value.h);
+}
+
+void BlendShader::setOpacity(float value) {
+  gl.Uniform1i(u_opacity, value);
 }

@@ -373,6 +373,176 @@ void Bitmap::blt(int x, int y,
 	           source, rect, opacity);
 }
 
+void Bitmap::blendBlt(int x, int y, const Bitmap& source, IntRect rect, unsigned blendType, int opacity)
+{
+  guardDisposed();
+
+  GUARD_MEGA;
+
+  if (source.isDisposed())
+    return;
+
+  opacity = clamp(opacity, 0, 255);
+
+  if (opacity == 0)
+    return;
+
+  if(x > width() || y > height())
+    return;
+
+  IntRect sRect = rect, dRect{x, y, rect.w, rect.h};
+
+  if(rect.x < 0) {
+    sRect.x = 0;
+    dRect.w -= rect.x;
+  }
+  if(rect.y < 0) {
+    sRect.y = 0;
+    dRect.h -= rect.y;
+  }
+
+  if(sRect.x + dRect.w > source.width())
+    dRect.w = source.width() - sRect.x;
+  if(sRect.y + dRect.h > source.height())
+    dRect.h = source.height() - sRect.y;
+
+  if(x < 0) {
+    dRect.x = 0;
+    sRect.x -= x;
+    dRect.w += x;
+  }
+  if(y < 0) {
+    dRect.y = 0;
+    sRect.y -= y;
+    dRect.h += y;
+  }
+
+  if(dRect.x + dRect.w > width())
+    dRect.w = width() - dRect.x;
+  if(dRect.y + dRect.h > height())
+    dRect.h = height() - dRect.y;
+
+  if(dRect.w <= 0 || dRect.h <= 0)
+    return;
+
+  sRect.w = dRect.w;
+  sRect.h = dRect.h;
+
+
+  SDL_Surface *srcSurf = source.megaSurface();
+
+  if (srcSurf && shState->config().subImageFix)
+  {
+    abort();
+    /* Blit from software surface, for broken GL drivers */
+    Vec2i gpTexSize;
+    shState->ensureTexSize(sRect.w, sRect.h, gpTexSize);
+    shState->bindTex();
+
+    GLMeta::subRectImageUpload(srcSurf->w, sRect.x, sRect.y, 0, 0,
+                               sRect.w, sRect.h, srcSurf, GL_RGBA);
+    GLMeta::subRectImageEnd();
+
+    SimpleShader &shader = shState->shaders().simple;
+    shader.bind();
+    shader.setTranslation(Vec2i());
+    shader.setTexSize(gpTexSize);
+
+    p->pushSetViewport(shader);
+    p->bindFBO();
+
+    Quad &quad = shState->gpQuad();
+    quad.setTexRect(FloatRect(0, 0, sRect.w, sRect.h));
+    quad.setPosRect(dRect);
+
+    p->blitQuad(quad);
+    p->popViewport();
+
+    p->addTaintedArea(dRect);
+    p->onModified();
+
+    return;
+  }
+  else if (srcSurf)
+  {
+    abort();
+    /* Blit from software surface */
+    /* Don't do transparent blits for now */
+    if (opacity < 255)
+      source.ensureNonMega();
+
+    SDL_Rect srcRect = sRect;
+    SDL_Rect dstRect = dRect;
+    SDL_Rect btmRect = { 0, 0, width(), height() };
+    SDL_Rect bltRect;
+
+    if (SDL_IntersectRect(&btmRect, &dstRect, &bltRect) != SDL_TRUE)
+      return;
+
+    int bpp;
+    Uint32 rMask, gMask, bMask, aMask;
+    SDL_PixelFormatEnumToMasks(SDL_PIXELFORMAT_ABGR8888,
+                               &bpp, &rMask, &gMask, &bMask, &aMask);
+    SDL_Surface *blitTemp =
+      SDL_CreateRGBSurface(0, dRect.w, dRect.h, bpp, rMask, gMask, bMask, aMask);
+
+    SDL_BlitScaled(srcSurf, &srcRect, blitTemp, 0);
+
+    TEX::bind(p->gl.tex);
+
+    if (bltRect.w == dstRect.w && bltRect.h == dstRect.h)
+    {
+      /* Dest rectangle lies within bounding box */
+      TEX::uploadSubImage(dRect.x, dRect.y,
+                          dRect.w, dRect.h,
+                          blitTemp->pixels, GL_RGBA);
+    }
+    else
+    {
+      /* Clipped blit */
+      GLMeta::subRectImageUpload(blitTemp->w, bltRect.x - dstRect.x, bltRect.y - dstRect.y,
+                                 bltRect.x, bltRect.y, bltRect.w, bltRect.h, blitTemp, GL_RGBA);
+      GLMeta::subRectImageEnd();
+    }
+
+    SDL_FreeSurface(blitTemp);
+
+    p->onModified();
+    return;
+  }
+
+  /* Fragment pipeline */
+  float normOpacity = (float) opacity / 255.0f;
+
+  TEXFBO &gpTex = shState->gpTexFBO(dRect.w, dRect.h);
+  GLMeta::blitBegin(gpTex);
+  GLMeta::blitSource(p->gl);
+  GLMeta::blitRectangle(dRect, Vec2i());
+  GLMeta::blitEnd();
+
+  BlendShader &shader = shState->shaders().blend[blendType > 7 ? 0 : blendType];
+  shader.bind();
+  shader.setSRect(FloatRect(sRect.x, sRect.y, sRect.w, sRect.h));
+  shader.setDTex(gpTex.tex);
+  shader.setDRect(FloatRect(dRect.x, dRect.y, dRect.w, dRect.h));
+  shader.setOpacity(normOpacity);
+
+  Quad &quad = shState->gpQuad();
+  quad.setTexPosRect(sRect, dRect);
+  quad.setColor(Vec4(1, 1, 1, normOpacity));
+
+  source.p->bindTexture(shader);
+  p->bindFBO();
+  p->pushSetViewport(shader);
+
+  p->blitQuad(quad);
+
+  p->popViewport();
+
+  p->addTaintedArea(dRect);
+  p->onModified();
+}
+
 void Bitmap::stretchBlt(const IntRect &destRect,
                         const Bitmap &source, const IntRect &sourceRect,
                         int opacity)

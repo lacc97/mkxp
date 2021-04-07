@@ -303,6 +303,23 @@ private:
 	GLint u_source, u_destination, u_subRect, u_opacity;
 };
 
+/* Bitmap blend */
+class BlendShader : public ShaderBase
+{
+public:
+  BlendShader(unsigned blendType);
+
+  void setSTex();
+  void setSRect(const FloatRect &value);
+  void setDTex(const TEX::ID value);
+  void setDRect(const FloatRect& value);
+//  void setDCoord(const Vec2 &value);
+  void setOpacity(float value);
+
+private:
+  GLint u_sTex, u_sRect, u_dTex, u_dRect, u_opacity;
+};
+
 /* Global object containing all available shaders */
 struct ShaderSet
 {
@@ -321,6 +338,8 @@ struct ShaderSet
 	SimpleTransShader simpleTrans;
 	HueShader hue;
 	BltShader blt;
+  BlendShader blend[8] = {BlendShader{0}, BlendShader{1}, BlendShader{2}, BlendShader{3},
+                          BlendShader{4}, BlendShader{5}, BlendShader{6}, BlendShader{7}};
 	SimpleMatrixShader simpleMatrix;
 	BlurShader blur;
 	TilemapVXShader tilemapVX;

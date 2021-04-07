@@ -49,6 +49,7 @@ set(EMBEDDED_INPUT
     shader/plane.frag
     shader/gray.frag
     shader/bitmapBlit.frag
+    shader/blend.frag
     shader/flatColor.frag
     shader/simple.frag
     shader/simpleColor.frag
@@ -92,8 +93,11 @@ source_group("Embedded Source" FILES ${EMBEDDED_INPUT} ${EMBEDDED_SRCS})
 
 
 if(BINDING STREQUAL "MRI")
-  set(MRIVERSION "1.8" CACHE STRING "Version of MRI to link with")
-  if(MRIVERSION STREQUAL "1.8")
+  set(MRIVERSION "1.9" CACHE STRING "Version of MRI to link with")
+  if(MRIVERSION STREQUAL "0")
+    pkg_check_modules(MRI REQUIRED IMPORTED_TARGET GLOBAL ruby)
+    add_library(ruby::ruby ALIAS PkgConfig::MRI)
+  elseif(MRIVERSION STREQUAL "1.8")
     add_subdirectory(lib/ruby-1.8)
     set(MRI_LIBRARIES ruby)
     add_library(ruby::ruby ALIAS ruby)
@@ -133,6 +137,7 @@ if(BINDING STREQUAL "MRI")
       ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/filesystem-binding.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/windowvx-binding.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/tilemapvx-binding.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/tktk_bitmap-binding.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/binding-mri/win32-binding.cpp)
 
   add_library(ruby_binding INTERFACE)
@@ -329,6 +334,7 @@ add_executable(mkxp ${EMBEDDED_SRCS} ${MAIN_HDRS} ${MAIN_SRCS})
   set_target_properties(mkxp PROPERTIES
       OUTPUT_NAME mkxp${MKXP_SUFFIX}
       CXX_VISIBILITY_PRESET hidden
+      ENABLE_EXPORTS ON
       INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/mkxp)
   target_compile_definitions(mkxp
       PRIVATE

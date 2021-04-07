@@ -52,6 +52,10 @@ public:
 	         const Bitmap &source, IntRect rect,
 	         int opacity = 255);
 
+  void blendBlt(int x, int y,
+                const Bitmap& source, IntRect rect,
+                unsigned blendType, int opacity = 255);
+
 	void stretchBlt(const IntRect &destRect,
 	                const Bitmap &source, const IntRect &sourceRect,
 	                int opacity = 255);
