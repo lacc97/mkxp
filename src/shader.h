@@ -320,6 +320,13 @@ private:
   GLint u_sTex, u_sRect, u_dTex, u_dRect, u_opacity;
 };
 
+/* Invert color */
+class InvertColorShader : public ShaderBase
+{
+ public:
+  InvertColorShader();
+};
+
 /* Global object containing all available shaders */
 struct ShaderSet
 {
@@ -340,6 +347,7 @@ struct ShaderSet
 	BltShader blt;
   BlendShader blend[8] = {BlendShader{0}, BlendShader{1}, BlendShader{2}, BlendShader{3},
                           BlendShader{4}, BlendShader{5}, BlendShader{6}, BlendShader{7}};
+  InvertColorShader invert;
 	SimpleMatrixShader simpleMatrix;
 	BlurShader blur;
 	TilemapVXShader tilemapVX;

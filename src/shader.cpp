@@ -687,3 +687,9 @@ void BlendShader::setDRect(const FloatRect& value)
 void BlendShader::setOpacity(float value) {
   gl.Uniform1i(u_opacity, value);
 }
+
+InvertColorShader::InvertColorShader() {
+  INIT_SHADER(simple, invert, InvertColorShader);
+
+  ShaderBase::init();
+}

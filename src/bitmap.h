@@ -73,6 +73,8 @@ public:
 	                      const Vec4 &color1, const Vec4 &color2,
 	                      bool vertical = false);
 
+  void invertColor();
+
 	void clearRect(int x, int y,
 	               int width, int height);
 	void clearRect(const IntRect &rect);
