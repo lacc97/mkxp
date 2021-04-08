@@ -520,11 +520,15 @@ void Bitmap::blendBlt(int x, int y, const Bitmap& source, IntRect rect, unsigned
   GLMeta::blitRectangle(dRect, Vec2i());
   GLMeta::blitEnd();
 
+  FloatRect posData((float) sRect.x / source.width(),
+                    (float) sRect.y / source.height(),
+                    (float) source.width() / gpTex.width,
+                    (float) source.height() / gpTex.height);
+
   BlendShader &shader = shState->shaders().blend[blendType > 7 ? 0 : blendType];
   shader.bind();
-  shader.setSRect(FloatRect(sRect.x, sRect.y, sRect.w, sRect.h));
   shader.setDTex(gpTex.tex);
-  shader.setDRect(FloatRect(dRect.x, dRect.y, dRect.w, dRect.h));
+  shader.setPosData(posData);
   shader.setOpacity(normOpacity);
 
   Quad &quad = shState->gpQuad();

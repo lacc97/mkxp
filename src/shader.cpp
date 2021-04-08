@@ -657,21 +657,9 @@ BlendShader::BlendShader(unsigned blendType)
 
   ShaderBase::init();
 
-  GET_U(sTex);
-  GET_U(sRect);
   GET_U(dTex);
-  GET_U(dRect);
+  GET_U(posData);
   GET_U(opacity);
-}
-
-void BlendShader::setSTex()
-{
-  gl.Uniform1i(u_sTex, 0);
-}
-
-void BlendShader::setSRect(const FloatRect& value)
-{
-  gl.Uniform4f(u_sRect, value.x, value.y, value.w, value.h);
 }
 
 void BlendShader::setDTex(const TEX::ID value)
@@ -679,9 +667,9 @@ void BlendShader::setDTex(const TEX::ID value)
   setTexUniform(u_dTex, 1, value);
 }
 
-void BlendShader::setDRect(const FloatRect& value)
+void BlendShader::setPosData(const FloatRect& value)
 {
-  gl.Uniform4f(u_dRect, value.x, value.y, value.w, value.h);
+  gl.Uniform4f(u_posData, value.x, value.y, value.w, value.h);
 }
 
 void BlendShader::setOpacity(float value) {

@@ -309,15 +309,12 @@ class BlendShader : public ShaderBase
 public:
   BlendShader(unsigned blendType);
 
-  void setSTex();
-  void setSRect(const FloatRect &value);
   void setDTex(const TEX::ID value);
-  void setDRect(const FloatRect& value);
-//  void setDCoord(const Vec2 &value);
+  void setPosData(const FloatRect &value);
   void setOpacity(float value);
 
 private:
-  GLint u_sTex, u_sRect, u_dTex, u_dRect, u_opacity;
+  GLint u_dTex, u_posData, u_opacity;
 };
 
 /* Invert color */

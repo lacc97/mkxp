@@ -1,8 +1,7 @@
 uniform sampler2D sTex;
-uniform vec4 sRect;
-
 uniform sampler2D dTex;
-uniform vec4 dRect;
+
+uniform vec4 posData;
 
 uniform lowp float opacity;
 
@@ -128,7 +127,7 @@ vec4 blend_overlay(vec4 d, vec4 s) {
 
 void main() {
     vec2 sCoord = v_texCoord;
-    vec2 dCoord = (((sCoord * sRect.zw) - sRect.xy) + dRect.xy) / dRect.zw;
+    vec2 dCoord = (sCoord - posData.xy) * posData.zw;
 
     vec4 sFrag = texture2D(sTex, sCoord);
     vec4 dFrag = texture2D(dTex, dCoord);
