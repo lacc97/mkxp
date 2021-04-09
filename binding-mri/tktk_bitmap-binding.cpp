@@ -23,3 +23,10 @@ WIN32_API int tktk_bitmap_BlendBlt(VALUE d_id, int x, int y, VALUE s_id, int r_x
 
   return 0;
 }
+
+WIN32_API int tktk_bitmap_InvertColor(VALUE id) {
+  auto* bm = fromId(id);
+  if(bm)
+      bm->invertColor();
+  return 0;
+}

@@ -51,6 +51,7 @@ set(EMBEDDED_INPUT
     shader/bitmapBlit.frag
     shader/blend.frag
     shader/flatColor.frag
+    shader/invert.frag
     shader/simple.frag
     shader/simpleColor.frag
     shader/simpleAlpha.frag
