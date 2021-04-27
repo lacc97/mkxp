@@ -689,7 +689,13 @@ void FileSystem::openReadRaw(SDL_RWops &ops,
                              bool freeOnClose)
 {
 	PHYSFS_File *handle = PHYSFS_openRead(filename);
-	assert(handle);
+  if(!handle) {
+    auto ec = PHYSFS_getLastErrorCode();
+    if(ec == PHYSFS_ERR_NOT_FOUND)
+      throw Exception(Exception::NoFileError, "file not found: %s", filename);
+    else
+      throw Exception(Exception::PHYSFSError, "PhysFS error: %d", ec);
+  }
 
 	initReadOps(handle, ops, freeOnClose);
 }
