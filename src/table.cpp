@@ -137,7 +137,8 @@ Table *Table::deserialize(const char *data, int len)
 		throw Exception(Exception::RGSSError, "Marshal: Table: bad file format");
 
 	Table *t = new Table(x, y, z);
-	memcpy(dataPtr(t->data), data, sizeof(int16_t)*size);
+  if(dataPtr(t->data))
+	  memcpy(dataPtr(t->data), data, sizeof(int16_t)*size);
 
 	return t;
 }
