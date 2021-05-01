@@ -120,7 +120,7 @@ GLState::GLState(const Config &conf)
 	blendMode.init(BlendNormal);
 	blend.init(true);
 	scissorTest.init(false);
-	scissorBox.init(IntRect(0, 0, conf.defScreenW, conf.defScreenH));
+	scissorBox.init(IntRect(0, 0, std::max(conf.defScreenW, 640), std::max(conf.defScreenH, 480)));
 	program.init(0);
 
 	if (conf.maxTextureSize > 0)
