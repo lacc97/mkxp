@@ -74,10 +74,10 @@ readUint32(PHYSFS_Io *io, uint32_t &result)
 	char buff[4];
 	PHYSFS_sint64 count = io->read(io, buff, 4);
 
-	result = ((buff[0] << 0x00) & 0x000000FF) |
-	         ((buff[1] << 0x08) & 0x0000FF00) |
-	         ((buff[2] << 0x10) & 0x00FF0000) |
-	         ((buff[3] << 0x18) & 0xFF000000) ;
+	result = ((uint32_t(buff[0]) << 0x00u) & 0x000000FFu) |
+	         ((uint32_t(buff[1]) << 0x08u) & 0x0000FF00u) |
+	         ((uint32_t(buff[2]) << 0x10u) & 0x00FF0000u) |
+	         ((uint32_t(buff[3]) << 0x18u) & 0xFF000000u) ;
 
 	return (count == 4);
 }
@@ -175,8 +175,12 @@ RGSS_ioRead(PHYSFS_Io *self, void *buffer, PHYSFS_uint64 len)
 		io->read(io, bBufferP, align);
 
 		/* Then xor them */
-		for (uint64_t i = 0; i < (align / 4); ++i)
-			dwBufferP[i] ^= advanceMagic(entry->currentMagic);
+		for (uint64_t i = 0; i < (align / 4); ++i) {
+      uint32_t dw;
+      memcpy(&dw, &dwBufferP[i], sizeof(uint32_t));
+      dw ^= advanceMagic(entry->currentMagic);
+      memcpy(&dwBufferP[i], &dw, sizeof(uint32_t));
+    }
 
 		bBufferP += align;
 	}
