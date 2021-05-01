@@ -120,6 +120,12 @@ void EventThread::process(RGSSThreadData &rtData)
 #endif
 
 	fullscreen = rtData.config.fullscreen;
+	int defScreenW, defScreenH;
+	defScreenW = rtData.config.defScreenW;
+	defScreenH = rtData.config.defScreenH;
+  SDL_SetWindowSize(win, std::max(defScreenW, 544), std::max(defScreenH, 416));
+  int firstrun;
+  firstrun = 0;
 	int toggleFSMod = rtData.config.anyAltToggleFS ? KMOD_ALT : KMOD_LALT;
 
 	fps.lastFrame = SDL_GetPerformanceCounter();
@@ -207,6 +213,16 @@ void EventThread::process(RGSSThreadData &rtData)
 			case SDL_WINDOWEVENT_SIZE_CHANGED :
 				winW = event.window.data1;
 				winH = event.window.data2;
+				if (firstrun == 1)
+				{
+					firstrun = 2;
+					SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+				}
+				if (firstrun == 0)
+				{
+					firstrun = 1;
+					SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+				}
 
 				windowSizeMsg.post(Vec2i(winW, winH));
 				resetInputStates();
@@ -256,15 +272,30 @@ void EventThread::process(RGSSThreadData &rtData)
 			if (event.key.keysym.scancode == SDL_SCANCODE_RETURN &&
 			    (event.key.keysym.mod & toggleFSMod))
 			{
+				if (!fullscreen && firstrun < 2)
+				{
+					firstrun = 2;
+					SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+				}
 				setFullscreen(win, !fullscreen);
 				if (!fullscreen && havePendingTitle)
 				{
 					SDL_SetWindowTitle(win, pendingTitle);
 					pendingTitle[0] = '\0';
 					havePendingTitle = false;
+					SDL_SetWindowSize(win, defScreenW, defScreenH);
+				}
+				else
+				{
+					SDL_SetWindowSize(win, defScreenW, defScreenH);
+				}
+				if (firstrun < 2)
+				{
+					firstrun = 2;
+					SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 				}
 
-				break;
+        break;
 			}
 
 			if (event.key.keysym.scancode == SDL_SCANCODE_F1)
