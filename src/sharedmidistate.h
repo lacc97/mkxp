@@ -82,8 +82,8 @@ struct SharedMidiState
 		flSettings = fluid.new_settings();
 		fluid.settings_setnum(flSettings, "synth.gain", 1.0f);
 		fluid.settings_setnum(flSettings, "synth.sample-rate", SYNTH_SAMPLERATE);
-		fluid.settings_setstr(flSettings, "synth.chorus.active", conf.midi.chorus ? "yes" : "no");
-		fluid.settings_setstr(flSettings, "synth.reverb.active", conf.midi.reverb ? "yes" : "no");
+		chorus = conf.midi.chorus;
+		reverb = conf.midi.reverb;
 
 		for (size_t i = 0; i < SYNTH_INIT_COUNT; ++i)
 			addSynth(false);
@@ -137,6 +137,9 @@ private:
 		else
 			Debug() << "Warning: No soundfont specified, sound might be mute";
 
+		fluid.synth_set_chorus_on(syn, chorus ? 1 : 0);
+		fluid.synth_set_reverb_on(syn, reverb ? 1 : 0);
+
 		Synth synth;
 		synth.inUse = usedNow;
 		synth.synth = syn;
@@ -144,6 +147,8 @@ private:
 
 		return syn;
 	}
+
+	bool reverb, chorus;
 };
 
 #endif // SHAREDMIDISTATE_H
