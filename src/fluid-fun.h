@@ -21,6 +21,8 @@ typedef int (*FLUIDSYNTHCHANNELPRESSUREPROC)(fluid_synth_t* synth, int chan, int
 typedef int (*FLUIDSYNTHPITCHBENDPROC)(fluid_synth_t* synth, int chan, int val);
 typedef int (*FLUIDSYNTHCCPROC)(fluid_synth_t* synth, int chan, int ctrl, int val);
 typedef int (*FLUIDSYNTHPROGRAMCHANGEPROC)(fluid_synth_t* synth, int chan, int program);
+typedef void (*FLUIDSYNTHSETCHORUSONPROC)(fluid_synth_t* synth, int on);
+typedef void (*FLUIDSYNTHSETREVERBONPROC)(fluid_synth_t* synth, int on);
 
 typedef fluid_settings_t* (*NEWFLUIDSETTINGSPROC)(void);
 typedef fluid_synth_t* (*NEWFLUIDSYNTHPROC)(fluid_settings_t* settings);
@@ -43,7 +45,9 @@ typedef void (*DELETEFLUIDSYNTHPROC)(fluid_synth_t* synth);
 	FLUID_FUN(synth_channel_pressure, FLUIDSYNTHCHANNELPRESSUREPROC) \
 	FLUID_FUN(synth_pitch_bend, FLUIDSYNTHPITCHBENDPROC) \
 	FLUID_FUN(synth_cc, FLUIDSYNTHCCPROC) \
-	FLUID_FUN(synth_program_change, FLUIDSYNTHPROGRAMCHANGEPROC)
+	FLUID_FUN(synth_program_change, FLUIDSYNTHPROGRAMCHANGEPROC) \
+  FLUID_FUN(synth_set_chorus_on, FLUIDSYNTHSETCHORUSONPROC) \
+  FLUID_FUN(synth_set_reverb_on, FLUIDSYNTHSETREVERBONPROC)
 
 /* Functions that don't fit into the default prefix naming scheme */
 #define FLUID_FUNCS2 \
