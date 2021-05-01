@@ -22,10 +22,32 @@
 #ifndef BOOSTHASH_H
 #define BOOSTHASH_H
 
-#include <boost/unordered/unordered_map.hpp>
-#include <boost/unordered/unordered_set.hpp>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <utility>
+
+namespace std {
+  template<typename T1, typename T2>
+  struct hash<std::pair<T1, T2>> {
+    std::size_t operator()(std::pair<T1, T2> const &p) const {
+      auto fn_hash_combine = [](std::size_t& seed, const auto& key) {
+        hash<typename std::remove_const<typename std::remove_reference<decltype(key)>::type>::type> hasher;
+        seed ^= hasher(key) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+      };
+
+      std::size_t seed1(0);
+      fn_hash_combine(seed1, p.first);
+      fn_hash_combine(seed1, p.second);
+
+      std::size_t seed2(0);
+      fn_hash_combine(seed2, p.second);
+      fn_hash_combine(seed2, p.first);
+
+      return std::min(seed1, seed2);
+    }
+  };
+}
 
 /* Wrappers around the boost unordered template classes,
  * exposing an interface similar to Qt's QHash/QSet */
@@ -34,7 +56,7 @@ template<typename K, typename V>
 class BoostHash
 {
 private:
-	typedef boost::unordered_map<K, V> BoostType;
+	typedef std::unordered_map<K, V> BoostType;
 	typedef std::pair<K, V> PairType;
 	BoostType p;
 
@@ -98,7 +120,7 @@ template<typename K>
 class BoostSet
 {
 private:
-	typedef boost::unordered_set<K> BoostType;
+	typedef std::unordered_set<K> BoostType;
 	BoostType p;
 
 public:
