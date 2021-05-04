@@ -108,6 +108,15 @@ SharedFontState::~SharedFontState()
 	delete p;
 }
 
+static std::string toLower(std::string_view s) noexcept {
+  std::string lowered;
+  lowered.reserve(s.size());
+
+  std::transform(s.begin(), s.end(), std::back_inserter(lowered), ::tolower);
+
+  return lowered;
+}
+
 void SharedFontState::initFontSetCB(SDL_RWops &ops,
                                     const std::string &filename)
 {
@@ -116,14 +125,14 @@ void SharedFontState::initFontSetCB(SDL_RWops &ops,
 	if (!font)
 		return;
 
-	std::string family = TTF_FontFaceFamilyName(font);
-	std::string style = TTF_FontFaceStyleName(font);
+	std::string family = toLower(TTF_FontFaceFamilyName(font));
+	std::string style = toLower(TTF_FontFaceStyleName(font));
 
 	TTF_CloseFont(font);
 
 	FontSet &set = p->sets[family];
 
-	if (style == "Regular")
+	if (style == "regular")
 		set.regular = filename;
 	else
 		set.other = filename;
