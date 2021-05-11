@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <sstream>
+
 #include "binding-util.h"
 
 #include "sharedstate.h"
@@ -30,77 +32,91 @@
 #endif
 #include "ruby/intern.h"
 
-static void
-fileIntFreeInstance(void *inst)
+static std::string read_all(SDL_RWops* ops) noexcept
 {
-	SDL_RWops *ops = static_cast<SDL_RWops*>(inst);
+  SDL_RWseek(ops, 0, RW_SEEK_SET);
 
-	SDL_RWclose(ops);
-	SDL_FreeRW(ops);
+  std::string data;
+
+  size_t read_count;
+  do {
+    std::array<char, BUFSIZ> buf;
+    read_count = SDL_RWread(ops, buf.data(), 1, buf.size());
+    data.insert(data.end(), buf.begin(), buf.begin() + read_count);
+  } while(read_count == BUFSIZ);
+
+  return data;
 }
 
-DEF_TYPE_CUSTOMFREE(FileInt, fileIntFreeInstance);
+DEF_TYPE_CUSTOMFREE(FileInt, freeInstance<std::istringstream>);
 
 static VALUE
 fileIntForPath(const char *path, bool rubyExc)
 {
-	SDL_RWops *ops = SDL_AllocRW();
+  auto *iss = [path, rubyExc]() -> std::istringstream* {
+    SDL_RWops *ops = SDL_AllocRW();
 
-	try
-	{
-		shState->fileSystem().openReadRaw(*ops, path);
-	}
-	catch (const Exception &e)
-	{
-		SDL_FreeRW(ops);
+    try
+    {
+      shState->fileSystem().openReadRaw(*ops, path);
+    }
+    catch (const Exception &e)
+    {
+      SDL_FreeRW(ops);
 
-		if (rubyExc)
-			raiseRbExc(e);
-		else
-			throw e;
-	}
+      if (rubyExc)
+        raiseRbExc(e);
+      else
+        throw e;
+    }
 
-	VALUE klass = rb_const_get(rb_cObject, rb_intern("FileInt"));
+    auto* iss = new std::istringstream{read_all(ops)};
 
-	VALUE obj = rb_obj_alloc(klass);
+    SDL_RWclose(ops);
+    SDL_FreeRW(ops);
 
-	setPrivateData(obj, ops);
+    return iss;
+  }();
+
+	auto obj = rb_obj_alloc(rb_const_get(rb_cObject, rb_intern("FileInt")));
+	setPrivateData(obj, iss);
 
 	return obj;
 }
 
 RB_METHOD(fileIntRead)
 {
+  auto length = [argc, argv]() -> long {
+    int length = -1;
+    rb_get_args(argc, argv, "i", &length RB_ARG_END);
+    return length;
+  }();
 
-	int length = -1;
-	rb_get_args(argc, argv, "i", &length RB_ARG_END);
+  auto* iss = getPrivateData<std::istringstream>(self);
 
-	SDL_RWops *ops = getPrivateData<SDL_RWops>(self);
+  if(length == -1) {
+    auto cur = iss->tellg();
 
-	if (length == -1)
-	{
-		Sint64 cur = SDL_RWtell(ops);
-		Sint64 end = SDL_RWseek(ops, 0, SEEK_END);
-		length = end - cur;
-		SDL_RWseek(ops, cur, SEEK_SET);
-	}
+    iss->seekg(0, std::ios::end);
+    auto end = iss->tellg();
 
-	if (length == 0)
-		return Qnil;
+    length = end - cur;
 
-	VALUE data = rb_str_new(0, length);
+    iss->seekg(cur);
+  }
 
-	SDL_RWread(ops, RSTRING_PTR(data), 1, length);
+  if(length == 0)
+    return Qnil;
 
-	return data;
+  VALUE data = rb_str_new(nullptr, length);
+  iss->read(RSTRING_PTR(data), length);
+
+  return data;
 }
 
 RB_METHOD(fileIntClose)
 {
 	RB_UNUSED_PARAM;
-
-	SDL_RWops *ops = getPrivateData<SDL_RWops>(self);
-	SDL_RWclose(ops);
 
 	return Qnil;
 }
@@ -109,12 +125,10 @@ RB_METHOD(fileIntGetByte)
 {
 	RB_UNUSED_PARAM;
 
-	SDL_RWops *ops = getPrivateData<SDL_RWops>(self);
+  auto* iss = getPrivateData<std::istringstream>(self);
 
-	unsigned char byte;
-	size_t result = SDL_RWread(ops, &byte, 1, 1);
-
-	return (result == 1) ? rb_fix_new(byte) : Qnil;
+  const auto ch = iss->get();
+  return (ch != std::char_traits<char>::eof() ? rb_fix_new(ch) : Qnil);
 }
 
 RB_METHOD(fileIntBinmode)
@@ -122,6 +136,24 @@ RB_METHOD(fileIntBinmode)
 	RB_UNUSED_PARAM;
 
 	return Qnil;
+}
+
+RB_METHOD(fileIntToStr) {
+  RB_UNUSED_PARAM;
+
+  auto *iss = getPrivateData<std::istringstream>(self);
+
+  auto cur = iss->tellg();
+  iss->seekg(0, std::ios::end);
+  auto length = iss->tellg();
+
+  iss->seekg(0);
+
+  VALUE data = rb_str_new(nullptr, length);
+  iss->read(RSTRING_PTR(data), length);
+  iss->seekg(cur);
+
+  return data;
 }
 
 VALUE
@@ -227,6 +259,8 @@ fileIntBindingInit()
 	_rb_define_method(klass, "getc", fileIntGetByte);
 	_rb_define_method(klass, "binmode", fileIntBinmode);
 	_rb_define_method(klass, "close", fileIntClose);
+
+  _rb_define_method(klass, "to_str", fileIntToStr);
 
 	_rb_define_module_function(rb_mKernel, "load_data", kernelLoadData);
 	_rb_define_module_function(rb_mKernel, "save_data", kernelSaveData);
