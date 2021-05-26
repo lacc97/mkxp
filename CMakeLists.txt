@@ -337,6 +337,9 @@ add_executable(mkxp ${EMBEDDED_SRCS} ${MAIN_HDRS} ${MAIN_SRCS})
       CXX_VISIBILITY_PRESET hidden
       ENABLE_EXPORTS ON
       INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/mkxp)
+  target_compile_features(mkxp
+      PRIVATE
+        cxx_std_17)
   target_compile_definitions(mkxp
       PRIVATE
         $<$<PLATFORM_ID:Linux>:_FILE_OFFSET_BITS=64>
@@ -361,9 +364,11 @@ add_executable(mkxp ${EMBEDDED_SRCS} ${MAIN_HDRS} ${MAIN_SRCS})
         PkgConfig::zlib
         $<$<BOOL:${SHARED_FLUID}>:PkgConfig::fluidsynth>
         SDL_sound-static win32api
+        mio::mio-headers
         ruby_binding)
 
 
+add_subdirectory(lib/mio)
 add_subdirectory(lib/SDL_Sound)
 add_subdirectory(lib/win32api)
 

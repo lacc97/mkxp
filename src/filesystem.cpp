@@ -29,117 +29,99 @@
 #include "boost-hash.h"
 #include "debugwriter.h"
 
+#include <mio/shared_mmap.hpp>
+
 #include <physfs.h>
 
 #include <SDL_sound.h>
 
 #include <stdio.h>
-#include <string.h>
+#include <cstring>
 #include <algorithm>
 #include <vector>
 #include <stack>
+
+#include <memory>
+#include <optional>
 
 #ifdef __APPLE__
 #include <iconv.h>
 #endif
 
-struct SDLRWIoContext
-{
-	SDL_RWops *ops;
-	std::string filename;
+namespace {
+  std::optional<mio::shared_mmap_source> map_file(const char* filename) noexcept {
+    mio::shared_mmap_source mapped;
 
-	SDLRWIoContext(const char *filename)
-	    : ops(SDL_RWFromFile(filename, "r")),
-	      filename(filename)
-	{
-		if (!ops)
-			throw Exception(Exception::SDLError,
-			                "Failed to open file: %s", SDL_GetError());
-	}
+    std::error_code ec;
+    mapped.map(filename, ec);
+    if(ec)
+      return {};
 
-	~SDLRWIoContext()
-	{
-		SDL_RWclose(ops);
-	}
-};
+    return mapped;
+  }
 
-static PHYSFS_Io *createSDLRWIo(const char *filename);
+  PHYSFS_Io* create_io(mio::shared_mmap_source src) noexcept {
+    struct opaque {
+      mio::shared_mmap_source src;
 
-static SDL_RWops *getSDLRWops(PHYSFS_Io *io)
-{
-	return static_cast<SDLRWIoContext*>(io->opaque)->ops;
-}
+      const char* beg{nullptr};
+      const char* cur{nullptr};
+      const char* end{nullptr};
+    };
 
-static PHYSFS_sint64 SDLRWIoRead(struct PHYSFS_Io *io, void *buf, PHYSFS_uint64 len)
-{
-	return SDL_RWread(getSDLRWops(io), buf, 1, len);
-}
+    auto io = std::make_unique<PHYSFS_Io>();
+    io->read = [](PHYSFS_Io *io, void *buf, PHYSFS_uint64 len) noexcept -> PHYSFS_sint64 {
+      auto* data = static_cast<struct opaque*>(io->opaque);
 
-static int SDLRWIoSeek(struct PHYSFS_Io *io, PHYSFS_uint64 offset)
-{
-	return (SDL_RWseek(getSDLRWops(io), offset, RW_SEEK_SET) != -1);
-}
+      const auto read_count = std::min<size_t>(len, data->end - data->cur);
 
-static PHYSFS_sint64 SDLRWIoTell(struct PHYSFS_Io *io)
-{
-	return SDL_RWseek(getSDLRWops(io), 0, RW_SEEK_CUR);
-}
+      std::memcpy(buf, data->cur, read_count);
+      data->cur += read_count;
 
-static PHYSFS_sint64 SDLRWIoLength(struct PHYSFS_Io *io)
-{
-	return SDL_RWsize(getSDLRWops(io));
-}
+      return read_count;
+    };
+    io->seek = [](PHYSFS_Io *io, PHYSFS_uint64 offset) noexcept -> int {
+      auto* data = static_cast<struct opaque*>(io->opaque);
 
-static struct PHYSFS_Io *SDLRWIoDuplicate(struct PHYSFS_Io *io)
-{
-	SDLRWIoContext *ctx = static_cast<SDLRWIoContext*>(io->opaque);
-	int64_t offset = io->tell(io);
-	PHYSFS_Io *dup = createSDLRWIo(ctx->filename.c_str());
+      if(offset > (data->end - data->beg))
+        return false;
 
-	if (dup)
-		SDLRWIoSeek(dup, offset);
+      data->cur = data->beg + offset;
+      return true;
+    };
+    io->tell = [](PHYSFS_Io* io) noexcept -> PHYSFS_sint64 {
+      auto* data = static_cast<struct opaque*>(io->opaque);
 
-	return dup;
-}
+      return (data->cur - data->beg);
+    };
+    io->length = [](PHYSFS_Io* io) noexcept -> PHYSFS_sint64 {
+      auto* data = static_cast<struct opaque*>(io->opaque);
 
-static void SDLRWIoDestroy(struct PHYSFS_Io *io)
-{
-	delete static_cast<SDLRWIoContext*>(io->opaque);
-	delete io;
-}
+      return (data->end - data->beg);
+    };
+    io->duplicate = [](PHYSFS_Io* io) noexcept -> PHYSFS_Io* {
+      auto* data = static_cast<struct opaque*>(io->opaque);
 
-static PHYSFS_Io SDLRWIoTemplate =
-{
-	0, 0, /* version, opaque */
-	SDLRWIoRead,
-	0, /* write */
-	SDLRWIoSeek,
-	SDLRWIoTell,
-	SDLRWIoLength,
-	SDLRWIoDuplicate,
-	0, /* flush */
-	SDLRWIoDestroy
-};
+      auto new_io = std::make_unique<PHYSFS_Io>(*io);
+      new_io->opaque = new opaque{*data};
 
-static PHYSFS_Io *createSDLRWIo(const char *filename)
-{
-	SDLRWIoContext *ctx;
+      return new_io.release();
+    };
+    io->destroy = [](PHYSFS_Io* io) noexcept {
+      delete static_cast<struct opaque*>(io->opaque);
+      delete io;
+    };
 
-	try
-	{
-		ctx = new SDLRWIoContext(filename);
-	}
-	catch (const Exception &e)
-	{
-		Debug() << "Failed mounting" << filename;
-		return 0;
-	}
+    auto data = std::make_unique<opaque>();
+    {
+      data->src = std::move(src);
+      data->beg = data->cur = data->src.data();
+      data->end = data->beg + data->src.size();
+    }
+    io->opaque = data.release();
 
-	PHYSFS_Io *io = new PHYSFS_Io;
-	*io = SDLRWIoTemplate;
-	io->opaque = ctx;
-
-	return io;
+    return io.release();
+  }
 }
 
 static inline PHYSFS_File *sdlPHYS(SDL_RWops *ops)
@@ -351,16 +333,10 @@ FileSystem::~FileSystem()
 
 void FileSystem::addPath(const char *path)
 {
-	/* Try the normal mount first */
-	if (!PHYSFS_mount(path, 0, 1))
-	{
-		/* If it didn't work, try mounting via a wrapped
-		 * SDL_RWops */
-		PHYSFS_Io *io = createSDLRWIo(path);
-
-		if (io)
-			PHYSFS_mountIo(io, path, 0, 1);
-	}
+  if(auto o_mapped = map_file(path); o_mapped)
+    PHYSFS_mountIo(create_io(*o_mapped), path, nullptr,true);
+  else
+    PHYSFS_mount(path, nullptr, true);
 }
 
 struct CacheEnumData
