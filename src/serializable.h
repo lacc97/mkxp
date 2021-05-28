@@ -22,16 +22,87 @@
 #ifndef SERIALIZABLE_H
 #define SERIALIZABLE_H
 
+#include <cassert>
+#include <cstring>
+
+#include <span>
+
+namespace mkxp {
+  namespace details {
+    template <typename T>
+    concept serializable_primitive = std::is_trivial_v<T> && std::is_standard_layout_v<T>;
+  };
+
+  class serializer {
+   public:
+    explicit serializer(std::span<char> buffer) noexcept : mp_beg{buffer.data()}, mp_cur{mp_beg}, mp_end{mp_beg + buffer.size()} {}
+
+    [[nodiscard]] inline auto available_bytes() const noexcept -> size_t {
+      return mp_end - mp_cur;
+    }
+
+    template <details::serializable_primitive T>
+    inline void write_one(const T& t) noexcept {
+      assert(available_bytes() >= sizeof(T));
+
+      std::memcpy(mp_cur, std::addressof(t), sizeof(T));
+      mp_cur += sizeof(T);
+    }
+
+    template <details::serializable_primitive T>
+    inline void write_many(std::span<const T> ts) noexcept {
+      auto cpy_size = ts.size() * sizeof(T);
+      assert(available_bytes() >= cpy_size);
+
+      std::memcpy(mp_cur, ts.data(), cpy_size);
+      mp_cur += cpy_size;
+    }
+
+   private:
+    std::span<char>::pointer mp_beg;
+    std::span<char>::pointer mp_cur;
+    std::span<char>::pointer mp_end;
+  };
+
+  class deserializer {
+   public:
+    explicit deserializer(std::span<const char> buffer) noexcept : mp_beg{buffer.data()}, mp_cur{mp_beg}, mp_end{mp_beg + buffer.size()} {}
+
+    [[nodiscard]] inline auto available_bytes() const noexcept -> size_t {
+      return mp_end - mp_cur;
+    }
+
+    template <details::serializable_primitive T>
+    inline auto read_one() noexcept -> T {
+      assert(available_bytes() >= sizeof(T));
+
+      T t;
+      std::memcpy(std::addressof(t), mp_cur, sizeof(T));
+      mp_cur += sizeof(T);
+      return t;
+    }
+
+    template <details::serializable_primitive T>
+    inline void read_many(std::span<T> ts) noexcept {
+      auto cpy_size = ts.size() * sizeof(T);
+      assert(available_bytes() >= cpy_size);
+
+      std::memcpy(ts.data(), mp_cur, cpy_size);
+      mp_cur += cpy_size;
+    }
+
+   private:
+    std::span<const char>::const_pointer mp_beg;
+    std::span<const char>::const_pointer mp_cur;
+    std::span<const char>::const_pointer mp_end;
+  };
+}
+
 struct Serializable
 {
 	virtual int serialSize() const = 0;
-	virtual void serialize(char *buffer) const = 0;
+	virtual void serialize(mkxp::serializer ss) const = 0;
 };
 
-template<class C>
-C *deserialize(const char *data)
-{
-	return C::deserialize(data);
-}
 
 #endif // SERIALIZABLE_H

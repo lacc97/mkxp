@@ -67,8 +67,8 @@ struct Color : public Serializable
 
 	/* Serializable */
 	int serialSize() const;
-	void serialize(char *buffer) const;
-	static Color *deserialize(const char *data, int len);
+	void serialize(mkxp::serializer ss) const override;
+	static Color *deserialize(mkxp::deserializer ds);
 
 	/* Internal */
 	void updateInternal();
@@ -119,8 +119,8 @@ struct Tone : public Serializable
 
 	/* Serializable */
 	int serialSize() const;
-	void serialize(char *buffer) const;
-	static Tone *deserialize(const char *data, int len);
+	void serialize(mkxp::serializer ss) const override;
+	static Tone *deserialize(mkxp::deserializer ds);
 
 	/* Internal */
 	void updateInternal();
@@ -178,8 +178,8 @@ struct Rect : public Serializable
 
 	/* Serializable */
 	int serialSize() const;
-	void serialize(char *buffer) const;
-	static Rect *deserialize(const char *data, int len);
+	void serialize(mkxp::serializer ss) const override;
+	static Rect *deserialize(mkxp::deserializer ds);
 
 	/* Internal */
 	FloatRect toFloatRect() const

@@ -36,7 +36,7 @@ serializableDump(int, VALUE *, VALUE self)
 
 	VALUE data = rb_str_new(0, dataSize);
 
-	GUARD_EXC( s->serialize(RSTRING_PTR(data)); );
+	GUARD_EXC( s->serialize(mkxp::serializer{std::span<char>(RSTRING_PTR(data), RSTRING_LEN(data))}); );
 
 	return data;
 }

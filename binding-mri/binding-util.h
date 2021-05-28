@@ -26,6 +26,7 @@
 #include <ruby/version.h>
 
 #include "exception.h"
+#include "serializable.h"
 
 // Ruby 1.8 and Ruby 1.9+ use different version macros
 #ifndef RUBY_API_VERSION_MAJOR
@@ -324,7 +325,7 @@ objectLoad(int argc, VALUE *argv, VALUE self)
 
 	C *c = 0;
 
-	GUARD_EXC( c = C::deserialize(data, dataLen); );
+	GUARD_EXC( c = C::deserialize(mkxp::deserializer{std::span(data, dataLen)}); );
 
 	setPrivateData(obj, c);
 

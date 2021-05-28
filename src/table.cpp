@@ -24,7 +24,6 @@
 #include <string.h>
 #include <algorithm>
 
-#include "serial-util.h"
 #include "exception.h"
 #include "util.h"
 
@@ -96,7 +95,7 @@ int Table::serialSize() const
 	return 20 + (xs * ys * zs) * 2;
 }
 
-void Table::serialize(char *buffer) const
+void Table::serialize(mkxp::serializer ss) const
 {
 	/* Table dimensions: we don't care
 	 * about them but RMXP needs them */
@@ -109,36 +108,37 @@ void Table::serialize(char *buffer) const
 	if (zs > 1)
 		dim = 3;
 
-	writeInt32(&buffer, dim);
-	writeInt32(&buffer, xs);
-	writeInt32(&buffer, ys);
-	writeInt32(&buffer, zs);
-	writeInt32(&buffer, size);
+  ss.write_one<int32_t>(dim);
+  ss.write_one<int32_t>(xs);
+  ss.write_one<int32_t>(ys);
+  ss.write_one<int32_t>(zs);
+  ss.write_one<int32_t>(size);
 
-	memcpy(buffer, dataPtr(data), sizeof(int16_t)*size);
+  ss.write_many<int16_t>(data);
 }
 
 
-Table *Table::deserialize(const char *data, int len)
+Table *Table::deserialize(mkxp::deserializer ds)
 {
-	if (len < 20)
+	if (ds.available_bytes() < 20)
 		throw Exception(Exception::RGSSError, "Marshal: Table: bad file format");
 
-	readInt32(&data);
-	int x = readInt32(&data);
-	int y = readInt32(&data);
-	int z = readInt32(&data);
-	int size = readInt32(&data);
+	ds.read_one<int32_t>();
+
+	int x = ds.read_one<int32_t>();
+	int y = ds.read_one<int32_t>();
+	int z = ds.read_one<int32_t>();
+	int size = ds.read_one<int32_t>();
 
 	if (size != x*y*z)
 		throw Exception(Exception::RGSSError, "Marshal: Table: bad file format");
 
-	if (len != 20 + x*y*z*2)
+	if (ds.available_bytes() != 2*size)
 		throw Exception(Exception::RGSSError, "Marshal: Table: bad file format");
 
 	Table *t = new Table(x, y, z);
-  if(dataPtr(t->data))
-	  memcpy(dataPtr(t->data), data, sizeof(int16_t)*size);
+  if(!t->data.empty())
+    ds.read_many<int16_t>(t->data);
 
 	return t;
 }

@@ -21,7 +21,6 @@
 
 #include "etc.h"
 
-#include "serial-util.h"
 #include "exception.h"
 
 #include <SDL_types.h>
@@ -103,25 +102,25 @@ int Color::serialSize() const
 	return 4 * 8;
 }
 
-void Color::serialize(char *buffer) const
+void Color::serialize(mkxp::serializer ss) const
 {
-	writeDouble(&buffer, red);
-	writeDouble(&buffer, green);
-	writeDouble(&buffer, blue);
-	writeDouble(&buffer, alpha);
+  ss.write_one<double>(red);
+  ss.write_one<double>(green);
+  ss.write_one<double>(blue);
+  ss.write_one<double>(alpha);
 }
 
-Color *Color::deserialize(const char *data, int len)
+Color *Color::deserialize(mkxp::deserializer ds)
 {
-	if (len != 32)
+	if (ds.available_bytes() != 32)
 		throw Exception(Exception::ArgumentError, "Color: Serialized data invalid");
 
 	Color *c = new Color();
 
-	c->red   = readDouble(&data);
-	c->green = readDouble(&data);
-	c->blue  = readDouble(&data);
-	c->alpha = readDouble(&data);
+	c->red   = ds.read_one<double>();
+	c->green = ds.read_one<double>();
+	c->blue  = ds.read_one<double>();
+	c->alpha = ds.read_one<double>();
 	c->updateInternal();
 
 	return c;
@@ -236,25 +235,25 @@ int Tone::serialSize() const
 	return 4 * 8;
 }
 
-void Tone::serialize(char *buffer) const
+void Tone::serialize(mkxp::serializer ss) const
 {
-	writeDouble(&buffer, red);
-	writeDouble(&buffer, green);
-	writeDouble(&buffer, blue);
-	writeDouble(&buffer, gray);
+  ss.write_one<double>(red);
+  ss.write_one<double>(green);
+  ss.write_one<double>(blue);
+  ss.write_one<double>(gray);
 }
 
-Tone *Tone::deserialize(const char *data, int len)
+Tone *Tone::deserialize(mkxp::deserializer ds)
 {
-	if (len != 32)
+	if (ds.available_bytes() != 32)
 		throw Exception(Exception::ArgumentError, "Tone: Serialized data invalid");
 
 	Tone *t = new Tone();
 
-	t->red   = readDouble(&data);
-	t->green = readDouble(&data);
-	t->blue  = readDouble(&data);
-	t->gray  = readDouble(&data);
+	t->red   = ds.read_one<double>();
+	t->green = ds.read_one<double>();
+	t->blue  = ds.read_one<double>();
+	t->gray  = ds.read_one<double>();
 	t->updateInternal();
 
 	return t;
@@ -382,25 +381,25 @@ int Rect::serialSize() const
 	return 4 * 4;
 }
 
-void Rect::serialize(char *buffer) const
+void Rect::serialize(mkxp::serializer ss) const
 {
-	writeInt32(&buffer, x);
-	writeInt32(&buffer, y);
-	writeInt32(&buffer, width);
-	writeInt32(&buffer, height);
+  ss.write_one<double>(x);
+  ss.write_one<double>(y);
+  ss.write_one<double>(width);
+  ss.write_one<double>(height);
 }
 
-Rect *Rect::deserialize(const char *data, int len)
+Rect *Rect::deserialize(mkxp::deserializer ds)
 {
-	if (len != 16)
+	if (ds.available_bytes() != 16)
 		throw Exception(Exception::ArgumentError, "Rect: Serialized data invalid");
 
 	Rect *r = new Rect();
 
-	r->x      = readInt32(&data);
-	r->y      = readInt32(&data);
-	r->width  = readInt32(&data);
-	r->height = readInt32(&data);
+	r->x      = ds.read_one<int32_t>();
+	r->y      = ds.read_one<int32_t>();
+	r->width  = ds.read_one<int32_t>();
+	r->height = ds.read_one<int32_t>();
 
 	return r;
 }

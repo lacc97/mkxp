@@ -48,8 +48,8 @@ public:
 	void resize(int x);
 
 	int serialSize() const;
-	void serialize(char *buffer) const;
-	static Table *deserialize(const char *data, int len);
+	void serialize(mkxp::serializer ss) const override;
+	static Table *deserialize(mkxp::deserializer ds);
 
 	/* <internal */
 	inline int16_t &at(int x, int y = 0, int z = 0)
