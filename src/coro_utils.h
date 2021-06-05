@@ -21,13 +21,6 @@ namespace mkxp::coro {
     class oneshot {
      public:
       struct promise_type {
-        promise_type() {
-          fmt::print("oneshot created\n");
-        }
-        ~promise_type() {
-          fmt::print("oneshot destroyed\n");
-        }
-
         auto get_return_object() noexcept -> oneshot {
           return oneshot{std::coroutine_handle<promise_type>::from_promise(*this)};
         }
