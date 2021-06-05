@@ -281,6 +281,7 @@ set(MAIN_HDRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fluid-fun.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl-util.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/coro_utils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/timer.h
     $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/windows/resource.h>)
 
 set(MAIN_SRCS
@@ -329,6 +330,7 @@ set(MAIN_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/midisource.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fluid-fun.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/coro_utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/timer.cpp
     $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/windows/resource.rc>)
 
 source_group("MKXP Source" FILES ${MAIN_SOURCE} ${MAIN_HEADERS})

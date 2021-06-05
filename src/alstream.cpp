@@ -48,34 +48,41 @@
 namespace mkxp {
   namespace {
     class audio_thread {
-      struct audio_source {
-        al::source source;
-        cppcoro::task<>* p_task{nullptr};
-      };
-
      public:
       static auto get() noexcept -> audio_thread& {
         static auto g_thread = audio_thread{};
         return g_thread;
       }
 
-      static auto unqueue_buffer(al::source source) noexcept {
+      inline auto schedule() noexcept {
+        return mp_thread->schedule();
+      }
+
+      template <typename Rep, typename Ratio>
+      inline auto schedule_after(std::chrono::duration<Rep, Ratio> delay) noexcept {
+        return mp_thread->schedule_after<Rep, Ratio>(delay);
+      }
+
+      auto unqueue_buffer(al::source source) noexcept {
         struct awaitable {
-          explicit awaitable(al::source src) noexcept : source{src} {}
+          awaitable(audio_thread& thread, al::source source) : mp_thread{std::addressof(thread)}, m_source{source} {}
 
           auto await_ready() const noexcept -> bool {
-            return source.get_processed_buffer_count() > 0;
+            return m_source.get_processed_buffer_count() > 0;
           }
-          void await_suspend(std::coroutine_handle<> handle) const noexcept {}
+          void await_suspend(std::coroutine_handle<> handle) noexcept {
+            mp_thread->schedule_source_check(m_source, handle);
+          }
           auto await_resume() noexcept -> al::buffer {
-            return source.unqueue_buffer();
+            return m_source.unqueue_buffer();
           }
 
          private:
-          al::source source;
+          audio_thread* mp_thread;
+          al::source m_source;
         };
 
-        return awaitable{source};
+        return awaitable{get(), source};
       }
 
       [[nodiscard]] auto is_running() const noexcept -> bool {
@@ -85,8 +92,6 @@ namespace mkxp {
       void start(uint32_t capacity) {
         assert(!is_running());
         mp_thread = std::make_unique<coro::worker_thread>(capacity);
-
-        coro::schedule_oneshot(*mp_thread, check_sources());
       }
       void stop() {
         mp_thread.reset();
@@ -97,21 +102,18 @@ namespace mkxp {
       auto schedule_source_task(al::source source, cppcoro::task<>& task) -> cppcoro::task<> {
         co_await mp_thread->schedule();
 
-        assert(std::find_if(m_sources.begin(), m_sources.end(), [source](const audio_source& src) -> bool { return src.source == source; }) == m_sources.end());
+        assert(std::find(m_sources.begin(), m_sources.end(), source) == m_sources.end());
 
-        m_sources.push_back({source, std::addressof(task)});
+        m_sources.push_back({source});
+        schedule_source_check(source, task);
       }
 
       auto deschedule_source_task(al::source source) -> cppcoro::task<> {
         co_await mp_thread->schedule();
 
-        assert(std::find_if(m_sources.begin(), m_sources.end(), [source](const audio_source& src) -> bool { return src.source == source; }) != m_sources.end());
+        assert(std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end());
 
-        std::erase_if(m_sources, [source](const audio_source& src) -> bool { return src.source == source; });
-      }
-
-      inline auto schedule() noexcept {
-        return mp_thread->schedule();
+        std::erase(m_sources, source);
       }
 
      private:
@@ -120,19 +122,25 @@ namespace mkxp {
 
       auto operator=(audio_thread&&) noexcept -> audio_thread& = default;
 
-      auto check_sources() -> cppcoro::task<> {
-        for(auto& src : m_sources) {
-          if(src.source.get_processed_buffer_count() > 0 && !src.p_task->is_ready())
-            coro::schedule_oneshot(*mp_thread, *src.p_task);
-        }
+      auto schedule_source_check(al::source source, cppcoro::task<>& task) noexcept -> coro::oneshot {
+        while(std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end()) {
+          co_await mp_thread->schedule_after(std::chrono::milliseconds{8});
 
-        coro::schedule_oneshot(*mp_thread, check_sources());
-        co_return;
+          if(source.get_processed_buffer_count() > 0)
+            co_await task;
+        }
+      }
+      auto schedule_source_check(al::source source, std::coroutine_handle<> handle) noexcept -> coro::oneshot {
+        while(std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end()) {
+          co_await mp_thread->schedule_after(std::chrono::milliseconds{8});
+
+          if((std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end()) && source.get_processed_buffer_count() > 0)
+            handle.resume();
+        }
       }
 
-
       std::unique_ptr<coro::worker_thread> mp_thread;
-      std::vector<audio_source> m_sources;
+      std::vector<al::source> m_sources;
     };
   }    // namespace
 }    // namespace mkxp
@@ -156,7 +164,7 @@ auto mkxp::al::stream::play_audio() -> cppcoro::task<> {
   }
 
   while(true) {
-    auto buf = co_await audio_thread::unqueue_buffer(m_source);
+    auto buf = co_await audio_thread::get().unqueue_buffer(m_source);
 
     /* If something went wrong, try again later */
     if(!buf)
@@ -269,6 +277,7 @@ mkxp::al::stream::~stream() {
 void mkxp::al::stream::close() {
   stop();
   mp_data_source.reset();
+  m_source.clear_queue();
 }
 
 void mkxp::al::stream::open(std::string_view filename) {
@@ -315,6 +324,7 @@ void mkxp::al::stream::play(float offset) {
     return;
 
   cppcoro::sync_wait([this]() -> cppcoro::task<> {
+    m_source.clear_queue();
     co_await audio_thread::get().schedule_source_task(m_source, *mp_runner);
     m_source.play();
   }());
