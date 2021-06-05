@@ -49,6 +49,12 @@ namespace mkxp::coro {
     explicit oneshot(std::coroutine_handle<promise_type> handle) {}
   };
 
+  inline void make_oneshot(cppcoro::task<>&& task) noexcept {
+    [](cppcoro::task<> task) -> oneshot {
+      co_await task;
+    }(std::move(task));
+  }
+
   template <typename SCHEDULER>
   inline void schedule_oneshot(SCHEDULER&& scheduler, cppcoro::task<>& task) noexcept {
     [](SCHEDULER&& scheduler, cppcoro::task<>& task) -> oneshot {
