@@ -9,14 +9,13 @@
 namespace mkxp {
   namespace detail {
     struct timer_info {
-      static auto create(SDL_TimerID id, std::any param) noexcept -> timer_info*;
+      static auto create(std::any param) noexcept -> timer_info*;
       void destroy() noexcept;
 
-      SDL_TimerID id;
       std::any param;
 
      private:
-      timer_info(SDL_TimerID id, std::any param) noexcept : id{id}, param{std::move(param)} {}
+      timer_info(std::any param) noexcept : param{std::move(param)} {}
       ~timer_info() = default;
     };
 
