@@ -128,7 +128,7 @@ void AudioStream::play(const std::string &filename,
 			{
 				/* This will throw on errors while
 				 * opening the data source */
-				stream.open(filename);
+				stream.open(filename.c_str());
 			}
 			catch (const Exception &e)
 			{

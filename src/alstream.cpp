@@ -27,6 +27,7 @@
 #include <cppcoro/schedule_on.hpp>
 #include <cppcoro/sync_wait.hpp>
 #include <cppcoro/task.hpp>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -48,41 +49,50 @@
 namespace mkxp {
   namespace {
     class audio_thread {
+      struct audio_source {
+        audio_source(al::source src) noexcept : source{src} {}
+
+        auto operator==(al::source other) const noexcept -> bool {
+          return source == other;
+        }
+
+        bool enabled{false};
+        al::source source;
+        std::coroutine_handle<> handle{};
+      };
+
      public:
       static auto get() noexcept -> audio_thread& {
         static auto g_thread = audio_thread{};
         return g_thread;
       }
 
-      inline auto schedule() noexcept {
-        return mp_thread->schedule();
+      inline static auto worker_thread() noexcept -> coro::worker_thread& {
+        assert(get().mp_thread);
+        return *get().mp_thread;
+      }
+
+      inline static auto schedule() noexcept {
+        return worker_thread().schedule();
       }
 
       template <typename Rep, typename Ratio>
-      inline auto schedule_after(std::chrono::duration<Rep, Ratio> delay) noexcept {
-        return mp_thread->schedule_after<Rep, Ratio>(delay);
+      inline static auto schedule_after(std::chrono::duration<Rep, Ratio> delay) noexcept {
+        return worker_thread().schedule_after<Rep, Ratio>(delay);
       }
 
-      auto unqueue_buffer(al::source source) noexcept {
-        struct awaitable {
-          awaitable(audio_thread& thread, al::source source) : mp_thread{std::addressof(thread)}, m_source{source} {}
-
-          auto await_ready() const noexcept -> bool {
-            return m_source.get_processed_buffer_count() > 0;
+      static auto unqueue_buffer(al::source source, std::weak_ptr<al::stream::data> w_data) noexcept -> cppcoro::task<al::buffer> {
+        do {
+          if(auto data = w_data.lock()) {
+            if(source.get_processed_buffer_count() > 0)
+              co_return source.unqueue_buffer();
+            else
+              co_await audio_thread::schedule_after(std::chrono::milliseconds{8});
+          } else {
+            /* suspend forever, but we should eventually get deleted from main thread */
+            co_await std::suspend_always{};
           }
-          void await_suspend(std::coroutine_handle<> handle) noexcept {
-            mp_thread->schedule_source_check(m_source, handle);
-          }
-          auto await_resume() noexcept -> al::buffer {
-            return m_source.unqueue_buffer();
-          }
-
-         private:
-          audio_thread* mp_thread;
-          al::source m_source;
-        };
-
-        return awaitable{get(), source};
+        } while(true);
       }
 
       [[nodiscard]] auto is_running() const noexcept -> bool {
@@ -98,113 +108,16 @@ namespace mkxp {
         assert(!is_running());
       }
 
-
-      auto schedule_source_task(al::source source, cppcoro::task<>& task) -> cppcoro::task<> {
-        co_await mp_thread->schedule();
-
-        assert(std::find(m_sources.begin(), m_sources.end(), source) == m_sources.end());
-
-        m_sources.push_back({source});
-        schedule_source_check(source, task);
-      }
-
-      auto deschedule_source_task(al::source source) -> cppcoro::task<> {
-        co_await mp_thread->schedule();
-
-        assert(std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end());
-
-        std::erase(m_sources, source);
-      }
-
      private:
       explicit audio_thread() = default;
       audio_thread(audio_thread&&) noexcept = default;
 
       auto operator=(audio_thread&&) noexcept -> audio_thread& = default;
 
-      auto schedule_source_check(al::source source, cppcoro::task<>& task) noexcept -> coro::oneshot {
-        while(std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end()) {
-          co_await mp_thread->schedule_after(std::chrono::milliseconds{8});
-
-          if(source.get_processed_buffer_count() > 0)
-            co_await task;
-        }
-      }
-      auto schedule_source_check(al::source source, std::coroutine_handle<> handle) noexcept -> coro::oneshot {
-        while(std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end()) {
-          co_await mp_thread->schedule_after(std::chrono::milliseconds{8});
-
-          if((std::find(m_sources.begin(), m_sources.end(), source) != m_sources.end()) && source.get_processed_buffer_count() > 0)
-            handle.resume();
-        }
-      }
-
       std::unique_ptr<coro::worker_thread> mp_thread;
-      std::vector<al::source> m_sources;
     };
   }    // namespace
 }    // namespace mkxp
-
-auto mkxp::al::stream::play_audio() -> cppcoro::task<> {
-  auto data_src_status = ALDataSource::Status{};
-  auto last_buffer = buffer{};
-
-  for(auto& buf : m_buffers) {
-    data_src_status = mp_data_source->fillBuffer(buf);
-    if(data_src_status == ALDataSource::Error)
-      co_return;
-
-    m_source.queue_buffer(buf);
-
-    if(data_src_status == ALDataSource::EndOfStream || data_src_status == ALDataSource::WrapAround) {
-      if(data_src_status == ALDataSource::WrapAround)
-        last_buffer = buf;
-      break;
-    }
-  }
-
-  while(true) {
-    auto buf = co_await audio_thread::get().unqueue_buffer(m_source);
-
-    /* If something went wrong, try again later */
-    if(!buf)
-      continue;
-
-    if(last_buffer) {
-      m_processed_frames = mp_data_source->loopStartFrames();
-      last_buffer = {};
-    } else {
-      auto bits = buf.get_bits();
-      auto size = buf.get_size();
-      auto chan = buf.get_channels();
-
-      if(bits != 0 && chan != 0)
-        m_processed_frames += ((size / (bits / 8)) / chan);
-    }
-
-    if(data_src_status == ALDataSource::EndOfStream)
-      continue;
-
-    data_src_status = mp_data_source->fillBuffer(buf);
-
-    if(data_src_status == ALDataSource::Error)
-      co_return;
-
-    m_source.queue_buffer(buf);
-
-    /* In case of buffer underrun,
-     * start playing again */
-    if(m_source.get_state() == AL_STOPPED)
-      m_source.play();
-
-    /* If this was the last buffer before the data
-     * source loop wrapped around again, mark it as
-     * such so we can catch it and reset the processed
-     * sample count once it gets unqueued */
-    if(data_src_status == ALDataSource::WrapAround)
-      last_buffer = buf;
-  }
-}
 
 namespace {
   struct ALStreamOpenHandler : public FileSystem::OpenHandler {
@@ -215,7 +128,7 @@ namespace {
 
     ALStreamOpenHandler(bool looped) : looped(looped), source(0), srcOps(static_cast<SDL_RWops*>(SDL_malloc(sizeof(SDL_RWops)))) {}
     ~ALStreamOpenHandler() {
-//      SDL_free(srcOps);
+      //      SDL_free(srcOps);
     }
 
     bool tryRead(SDL_RWops& ops, const char* ext) {
@@ -280,78 +193,209 @@ void mkxp::al::stream::close() {
   m_source.clear_queue();
 }
 
-void mkxp::al::stream::open(std::string_view filename) {
-  {
-    ALStreamOpenHandler handler{m_looped};
-    shState->fileSystem().openRead(handler, filename.data());
-    if(!handler.source) {
-      Debug() << fmt::format("Unable to decode audio stream: {}: {}", filename, handler.errorMsg);
-      return;
-    }
-
-    cppcoro::sync_wait(cppcoro::schedule_on(audio_thread::get(), [this, src = handler.source]() -> cppcoro::task<> {
-      mp_data_source.reset(src);
-      co_return;
-    }()));
+void mkxp::al::stream::open(const char* filename) {
+  switch(query_state()) {
+    case state::e_Playing:
+    case state::e_Paused:
+      cppcoro::sync_wait(stop_stream());
+    case state::e_Stopped:
+      close_source();
+    case state::e_Closed:
+      open_source(filename);
+      break;
   }
-
-  if(!mp_runner) {
-    mp_runner = std::make_unique<cppcoro::task<>>(play_audio());
-
-    coro::schedule_oneshot(audio_thread::get(), *mp_runner);
-  }
-
-  m_state = state::e_Stopped;
 }
 
 void mkxp::al::stream::stop() {
-  if(!mp_runner || m_state == state::e_Stopped)
-    return;
+  switch(query_state()) {
+    case state::e_Closed:
+    case state::e_Stopped:
+      break;
 
-  cppcoro::sync_wait(audio_thread::get().deschedule_source_task(m_source));
-
-  /* wait one cycle */
-  cppcoro::sync_wait(cppcoro::schedule_on(audio_thread::get(), [this]() -> cppcoro::task<> {
-    m_source.stop();
-    co_return;
-  }()));
-
-  m_state = state::e_Stopped;
+    case state::e_Playing:
+    case state::e_Paused:
+      cppcoro::sync_wait(stop_stream());
+      break;
+  }
 }
 
 void mkxp::al::stream::play(float offset) {
-  if(!mp_runner)
+  if(!m_source)
     return;
 
-  cppcoro::sync_wait([this]() -> cppcoro::task<> {
-    m_source.clear_queue();
-    co_await audio_thread::get().schedule_source_task(m_source, *mp_runner);
-    m_source.play();
-  }());
+  switch(query_state()) {
+    case state::e_Closed:
+    case state::e_Playing:
+      break;
 
-  m_state = state::e_Playing;
+    case state::e_Stopped:
+      coro::make_oneshot(start_stream(offset));
+    case state::e_Paused:
+      cppcoro::sync_wait(resume_stream());
+      break;
+  }
 }
 
 void mkxp::al::stream::pause() {
-  if(!mp_runner)
+  switch(query_state()) {
+    case state::e_Closed:
+    case state::e_Stopped:
+    case state::e_Paused:
+      break;
+
+    case state::e_Playing:
+      cppcoro::sync_wait(pause_stream());
+      break;
+  }
+}
+
+void mkxp::al::stream::open_source(const char* filename) {
+  assert(!mp_data_source);
+
+  ALStreamOpenHandler handler{m_looped};
+  shState->fileSystem().openRead(handler, filename);
+  if(!handler.source) {
+    Debug() << fmt::format("Unable to decode audio stream: {}: {}", filename, handler.errorMsg);
     return;
+  }
 
-  coro::schedule_oneshot(audio_thread::get(), [this]() -> cppcoro::task<> {
-    m_source.pause();
-    co_return;
-  }());
+  mp_data_source.reset(handler.source);
+}
 
-  m_state = state::e_Paused;
+auto mkxp::al::stream::start_stream(float offset) noexcept -> cppcoro::task<> {
+  assert(m_source);
+  assert(!mp_data);
+  assert(mp_data_source);
+
+  mp_data = std::make_shared<data>();
+  mp_data->processed_frames = static_cast<uint64_t>(offset * static_cast<double>(mp_data_source->sampleRate()));
+
+  m_source.clear_queue();
+  mp_data_source->seekToOffset(offset);
+
+  auto last_buffer = al::buffer{};
+  for(auto& buf : m_buffers) {
+    auto status = mp_data_source->fillBuffer(buf);
+    if(status == ALDataSource::Error) {
+      mp_data.reset();
+      co_return;
+    }
+
+    m_source.queue_buffer(buf);
+
+    if(status == ALDataSource::EndOfStream || status == ALDataSource::WrapAround) {
+      if(status == ALDataSource::WrapAround)
+        last_buffer = buf;
+      break;
+    }
+  }
+
+  mp_data->state = state::e_Paused;
+
+  co_await loop_stream();
+}
+
+auto mkxp::al::stream::loop_stream() noexcept -> cppcoro::task<> {
+  auto w_data = std::weak_ptr<data>(mp_data);
+
+  co_await audio_thread::schedule();
+  //  co_await audio_thread::get().register_audio_source(m_source, mp_data);
+
+  auto last_buffer = al::buffer{};
+  while(true) {
+    auto buf = co_await audio_thread::unqueue_buffer(m_source, w_data);
+
+    /* If something went wrong, try again later */
+    if(!buf)
+      continue;
+
+    if(last_buffer) {
+      mp_data->processed_frames = mp_data_source->loopStartFrames();
+      last_buffer = {};
+    } else {
+      auto bits = buf.get_bits();
+      auto size = buf.get_size();
+      auto chan = buf.get_channels();
+
+      if(bits != 0 && chan != 0)
+        mp_data->processed_frames += ((size / (bits / 8)) / chan);
+    }
+
+    //    if(data_src_status == ALDataSource::EndOfStream)
+    //      continue;
+
+    auto status = mp_data_source->fillBuffer(buf);
+    if(status == ALDataSource::Error)
+      co_return;
+
+    m_source.queue_buffer(buf);
+
+    /* In case of buffer underrun,
+     * start playing again */
+    if(m_source.get_state() == AL_STOPPED)
+      m_source.play();
+
+    /* If this was the last buffer before the data
+     * source loop wrapped around again, mark it as
+     * such so we can catch it and reset the processed
+     * sample count once it gets unqueued */
+    if(status == ALDataSource::WrapAround)
+      last_buffer = buf;
+  }
+}
+
+auto mkxp::al::stream::resume_stream() noexcept -> cppcoro::task<> {
+  co_await audio_thread::schedule();
+
+  assert(m_source);
+  assert(mp_data);
+
+  m_source.play();
+
+  mp_data->state = state::e_Playing;
+}
+
+auto mkxp::al::stream::pause_stream() noexcept -> cppcoro::task<> {
+  co_await audio_thread::schedule();
+
+  assert(m_source);
+  assert(mp_data);
+
+  m_source.pause();
+
+  mp_data->state = state::e_Paused;
+}
+
+auto mkxp::al::stream::stop_stream() noexcept -> cppcoro::task<> {
+  co_await audio_thread::schedule();
+
+  assert(m_source);
+  assert(mp_data);
+
+  mp_data.reset();
+  m_source.stop();
+}
+
+void mkxp::al::stream::close_source() {
+  assert(!mp_data);
+  assert(!mp_data_source);
+
+  mp_data_source.reset();
 }
 
 auto mkxp::al::stream::get_offset() const -> float {
-  if(!mp_data_source)
+  if(!mp_data)
     return 0;
 
-  return cppcoro::sync_wait(cppcoro::schedule_on(audio_thread::get(), [this]() -> cppcoro::task<float> {
-    float proc_offset = static_cast<float>(m_processed_frames) / mp_data_source->sampleRate();
-    co_return proc_offset + m_source.get_sec_offset();
-  }()));
+  return cppcoro::sync_wait([this]() -> cppcoro::task<float> {
+    auto data = mp_data;
+    if(!data)
+      co_return 0;
+
+    assert(mp_data_source);
+
+    co_return(static_cast<float>(data->processed_frames) / mp_data_source->sampleRate()) + m_source.get_sec_offset();
+  }());
 }
 void mkxp::al::stream::set_pitch(float value) {
   coro::schedule_oneshot(audio_thread::get(), [](ALDataSource* data_src, al::source src, float value) -> cppcoro::task<> {

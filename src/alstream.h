@@ -45,19 +45,27 @@ namespace mkxp::al {
 
   class stream {
    public:
-    static auto create() -> stream;
+    struct data {
+      std::atomic<enum state> state{state::e_Closed};
+      std::atomic_uint64_t processed_frames{0};
+    };
 
-    stream(bool looped);
+    explicit stream(bool looped);
     ~stream();
 
     void close();
-    void open(std::string_view filename);
+    void open(const char* filename);
     void stop();
     void play(float offset = 0.0f);
     void pause();
 
     auto query_state() const noexcept -> state {
-      return m_state;
+      if(!mp_data_source)
+        return state::e_Closed;
+      if(!mp_data)
+        return state::e_Stopped;
+
+      return mp_data->state;
     }
 
     auto get_offset() const -> float;
@@ -65,18 +73,22 @@ namespace mkxp::al {
     void set_volume(float value);
 
    private:
-    auto play_audio() -> cppcoro::task<>;
+    void open_source(const char* filename);
+    void close_source();
+
+    auto start_stream(float offset) noexcept -> cppcoro::task<>;
+    auto loop_stream() noexcept -> cppcoro::task<>;
+    auto pause_stream() noexcept -> cppcoro::task<>;
+    auto resume_stream() noexcept -> cppcoro::task<>;
+    auto stop_stream() noexcept -> cppcoro::task<>;
 
     bool m_looped;
 
     al::source m_source;
     std::array<al::buffer, 3> m_buffers;
+
     std::unique_ptr<ALDataSource> mp_data_source;
-
-    std::unique_ptr<cppcoro::task<>> mp_runner;
-
-    uint64_t m_processed_frames{};
-    state m_state{state::e_Closed};
+    std::shared_ptr<data> mp_data;
   };
 }
 
