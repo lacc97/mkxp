@@ -1,7 +1,9 @@
 #include "coro_utils.h"
 
-mkxp::coro::worker_thread::worker_thread(uint32_t capacity) : mp_state{std::make_unique<thread_state>(capacity)} {
+mkxp::coro::worker_thread::worker_thread(uint32_t capacity) : mp_state{std::make_shared<thread_state>(capacity)} {
   m_thread = std::jthread{[](std::stop_token token, thread_state* state) {
+    state->set_id();
+
     while(!token.stop_requested()) {
       if(state->queue.was_empty())
         state->sleep();
@@ -12,6 +14,6 @@ mkxp::coro::worker_thread::worker_thread(uint32_t capacity) : mp_state{std::make
       }
     }
 
-    state->stopped.store(true, std::memory_order_release);
+    state->mark_stopped();
   }, mp_state.get()};
 }
