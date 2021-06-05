@@ -12,12 +12,21 @@
 #include <cppcoro/schedule_on.hpp>
 #include <cppcoro/task.hpp>
 
+#include <fmt/format.h>
+
 #include "timer.h"
 
 namespace mkxp::coro {
   class oneshot {
    public:
     struct promise_type {
+      promise_type() {
+        fmt::print("oneshot created\n");
+      }
+      ~promise_type() {
+        fmt::print("oneshot destroyed\n");
+      }
+
       auto get_return_object() noexcept -> oneshot {
         return oneshot{std::coroutine_handle<promise_type>::from_promise(*this)};
       }
@@ -60,15 +69,24 @@ namespace mkxp::coro {
     struct thread_state {
       explicit thread_state(uint32_t capacity) : queue{capacity} {}
 
+      inline auto id() const noexcept -> std::thread::id {
+        return thread_id;
+      }
+
       inline auto is_stopped() const noexcept -> bool {
         return stopped.load(std::memory_order_acquire);
       }
 
+      inline void sleep() noexcept {
+        wakeup.wait(false, std::memory_order_acquire);
+        wakeup.clear(std::memory_order_relaxed);
+      }
       inline void wake_up() noexcept {
         wakeup.test_and_set(std::memory_order_release);
         wakeup.notify_one();
       }
 
+      std::thread::id thread_id;
       std::atomic_bool stopped{false};
       std::atomic_flag wakeup{false};
       atomic_queue::AtomicQueueB<void*> queue;
@@ -80,7 +98,7 @@ namespace mkxp::coro {
 
      public:
       auto await_ready() noexcept -> bool {
-        return false;
+        return std::this_thread::get_id() == mp_worker_state->id();
       }
       void await_suspend(std::coroutine_handle<> awaiting) noexcept {
         /* could deadlock? */
@@ -101,7 +119,10 @@ namespace mkxp::coro {
 
      public:
       auto await_ready() noexcept -> bool {
-        return false;
+        if(m_interval.count() > 0)
+          return false;
+        else
+          return m_no_delay_op.await_ready();
       }
       void await_suspend(std::coroutine_handle<> awaiting) noexcept {
         if(m_interval.count() > 0) {
@@ -113,18 +134,15 @@ namespace mkxp::coro {
             }
           });
         } else {
-          if(auto state = mp_worker_state.lock()) {
-            state->queue.push(awaiting.address());
-
-            state->wake_up();
-          }
+          m_no_delay_op.await_suspend(awaiting);
         }
       }
       void await_resume() noexcept {}
 
      private:
-      delayed_schedule_operation(std::weak_ptr<thread_state> ts, std::chrono::milliseconds interval) noexcept : mp_worker_state{std::move(ts)}, m_interval{interval} {}
+      delayed_schedule_operation(const std::shared_ptr<thread_state>& ts, std::chrono::milliseconds interval) noexcept : m_no_delay_op{ts.get()}, mp_worker_state{ts}, m_interval{interval} {}
 
+      schedule_operation m_no_delay_op;
       std::weak_ptr<thread_state> mp_worker_state;
       std::chrono::milliseconds m_interval;
     };
