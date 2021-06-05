@@ -78,7 +78,7 @@ struct AudioStream
 	 * soon as the ME ends, so we unset this flag. */
 	bool noResumeStop;
 
-	ALStream stream;
+	mkxp::al::stream stream;
 	SDL_mutex *streamMut;
 
 	/* Fade out */
@@ -118,7 +118,7 @@ struct AudioStream
 		uint32_t startTicks;
 	} fadeIn;
 
-	AudioStream(ALStream::LoopMode loopMode,
+	AudioStream(bool looped,
 	            const std::string &threadId);
 	~AudioStream();
 

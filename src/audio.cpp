@@ -64,9 +64,9 @@ struct AudioPrivate
 	} meWatch;
 
 	AudioPrivate(RGSSThreadData &rtData)
-	    : bgm(ALStream::Looped, "bgm"),
-	      bgs(ALStream::Looped, "bgs"),
-	      me(ALStream::NotLooped, "me"),
+	    : bgm(true, "bgm"),
+	      bgs(true, "bgs"),
+	      me(false, "me"),
 	      se(rtData.config),
 	      syncPoint(rtData.syncPoint)
 	{
@@ -99,7 +99,7 @@ struct AudioPrivate
 			{
 				me.lockStream();
 
-				if (me.stream.queryState() == ALStream::Playing)
+				if (me.stream.query_state() == mkxp::al::state::e_Playing)
 				{
 					/* ME playing detected. -> FadeOutBGM */
 					bgm.extPaused = true;
@@ -115,7 +115,7 @@ struct AudioPrivate
 			{
 				me.lockStream();
 
-				if (me.stream.queryState() != ALStream::Playing)
+				if (me.stream.query_state() != mkxp::al::state::e_Playing)
 				{
 					/* ME has ended while fading OUT BGM. -> FadeInBGM */
 					me.unlockStream();
@@ -129,7 +129,7 @@ struct AudioPrivate
 				float vol = bgm.getVolume(AudioStream::External);
 				vol -= fadeOutStep;
 
-				if (vol < 0 || bgm.stream.queryState() != ALStream::Playing)
+				if (vol < 0 || bgm.stream.query_state() != mkxp::al::state::e_Playing)
 				{
 					/* Either BGM has fully faded out, or stopped midway. -> MePlaying */
 					bgm.setVolume(AudioStream::External, 0);
@@ -152,16 +152,16 @@ struct AudioPrivate
 			{
 				me.lockStream();
 
-				if (me.stream.queryState() != ALStream::Playing)
+				if (me.stream.query_state() != mkxp::al::state::e_Playing)
 				{
 					/* ME has ended */
 					bgm.lockStream();
 
 					bgm.extPaused = false;
 
-					ALStream::State sState = bgm.stream.queryState();
+          mkxp::al::state sState = bgm.stream.query_state();
 
-					if (sState == ALStream::Paused)
+					if (sState == mkxp::al::state::e_Paused)
 					{
 						/* BGM is paused. -> FadeInBGM */
 						bgm.stream.play();
@@ -190,7 +190,7 @@ struct AudioPrivate
 			{
 				bgm.lockStream();
 
-				if (bgm.stream.queryState() == ALStream::Stopped)
+				if (bgm.stream.query_state() == mkxp::al::state::e_Stopped)
 				{
 					/* BGM stopped midway fade in. -> MeNotPlaying */
 					bgm.setVolume(AudioStream::External, 1.0f);
@@ -202,7 +202,7 @@ struct AudioPrivate
 
 				me.lockStream();
 
-				if (me.stream.queryState() == ALStream::Playing)
+				if (me.stream.query_state() == mkxp::al::state::e_Playing)
 				{
 					/* ME started playing midway BGM fade in. -> FadeOutBGM */
 					bgm.extPaused = true;

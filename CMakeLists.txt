@@ -50,6 +50,7 @@ set(EMBEDDED_INPUT
     shader/gray.frag
     shader/bitmapBlit.frag
     shader/blend.frag
+    shader/changeTone.frag
     shader/flatColor.frag
     shader/invert.frag
     shader/simple.frag
@@ -253,7 +254,6 @@ set(MAIN_HDRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/global-ibo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/exception.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/filesystem.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/serial-util.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/intrulist.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/binding.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gl-util.h
@@ -280,6 +280,7 @@ set(MAIN_HDRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/sharedmidistate.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fluid-fun.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl-util.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/coro_utils.h
     $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/windows/resource.h>)
 
 set(MAIN_SRCS
@@ -327,6 +328,7 @@ set(MAIN_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/autotilesvx.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/midisource.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fluid-fun.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/coro_utils.cpp
     $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/windows/resource.rc>)
 
 source_group("MKXP Source" FILES ${MAIN_SOURCE} ${MAIN_HEADERS})
@@ -339,7 +341,7 @@ add_executable(mkxp ${EMBEDDED_SRCS} ${MAIN_HDRS} ${MAIN_SRCS})
       INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/mkxp)
   target_compile_features(mkxp
       PRIVATE
-        cxx_std_17)
+        cxx_std_20)
   target_compile_definitions(mkxp
       PRIVATE
         $<$<PLATFORM_ID:Linux>:_FILE_OFFSET_BITS=64>
@@ -363,14 +365,11 @@ add_executable(mkxp ${EMBEDDED_SRCS} ${MAIN_HDRS} ${MAIN_SRCS})
         PkgConfig::vorbisfile
         PkgConfig::zlib
         $<$<BOOL:${SHARED_FLUID}>:PkgConfig::fluidsynth>
-        SDL_sound-static win32api
-        mio::mio-headers
+        fmt::fmt
         ruby_binding)
 
 
-add_subdirectory(lib/mio)
-add_subdirectory(lib/SDL_Sound)
-add_subdirectory(lib/win32api)
+add_subdirectory(lib)
 
 
 install(TARGETS mkxp win32api

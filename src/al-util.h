@@ -24,7 +24,10 @@
 
 #include <al.h>
 #include <SDL_audio.h>
-#include <assert.h>
+#include <cassert>
+
+#include <bit>
+#include <utility>
 
 namespace AL
 {
@@ -191,6 +194,148 @@ namespace Source
 }
 
 }
+
+namespace mkxp::al {
+  class source;
+
+  class buffer {
+    friend class source;
+
+   public:
+    static inline auto create() noexcept -> buffer {
+      ALuint id;
+      alGenBuffers(1, &id);
+      return buffer{id};
+    }
+
+    inline buffer() noexcept = default;
+
+    inline void destroy() noexcept {
+      if(m_id)
+        alDeleteBuffers(1, &m_id);
+      m_id = 0;
+    }
+
+    inline auto get_integer(ALenum prop) const noexcept -> ALint {
+      ALint value;
+      alGetBufferi(m_id, prop, &value);
+      return value;
+    }
+
+
+    inline auto get_bits() const noexcept -> ALint {
+      return get_integer(AL_BITS);
+    }
+
+    inline auto get_channels() const noexcept -> ALint {
+      return get_integer(AL_CHANNELS);
+    }
+
+    inline auto get_size() const noexcept -> ALint {
+      return get_integer(AL_SIZE);
+    }
+
+
+    inline explicit operator bool() const noexcept {
+      return m_id != 0;
+    }
+
+    inline operator AL::Buffer::ID() const noexcept {
+      return AL::Buffer::ID(m_id);
+    }
+
+   private:
+    inline explicit buffer(ALuint id) noexcept : m_id{id} {}
+
+    ALuint m_id{};
+  };
+
+  class source {
+   public:
+    static inline auto create() noexcept -> source {
+      ALuint id;
+      alGenSources(1, &id);
+      return source{id};
+    }
+
+    inline source() noexcept = default;
+
+    inline void destroy() noexcept {
+      if(m_id)
+        alDeleteSources(1, &m_id);
+      m_id = 0;
+    }
+
+    inline void play() noexcept {
+      alSourcePlay(m_id);
+    }
+    inline void pause() noexcept {
+      alSourcePause(m_id);
+    }
+    inline void stop() noexcept {
+      alSourceStop(m_id);
+    }
+
+    inline void attach_buffer(const buffer& buf) noexcept {
+      alSourcei(m_id, AL_BUFFER, std::bit_cast<ALint>(buf.m_id));
+    }
+    inline void detach_buffer() noexcept {
+      alSourcei(m_id, AL_BUFFER, 0);
+    }
+
+    inline void queue_buffer(const buffer& buf) noexcept {
+      alSourceQueueBuffers(m_id, 1, &buf.m_id);
+    }
+    inline buffer unqueue_buffer() noexcept {
+      ALuint id;
+      alSourceUnqueueBuffers(m_id, 1, &id);
+      return buffer{id};
+    }
+
+    inline void clear_queue() noexcept {
+      alSourcei(m_id, AL_BUFFER, 0);
+    }
+
+    inline auto get_integer(ALenum prop) const noexcept -> ALint {
+      ALint value;
+      alGetSourcei(m_id, prop, &value);
+      return value;
+    }
+
+    inline auto get_sec_offset() const noexcept -> ALfloat {
+      ALfloat value;
+      alGetSourcef(m_id, AL_SEC_OFFSET, &value);
+      return value;
+    }
+    inline auto get_state() const noexcept -> ALint {
+      return get_integer(AL_SOURCE_STATE);
+    }
+    inline auto get_processed_buffer_count() const noexcept -> ALfloat {
+      return get_integer(AL_BUFFERS_PROCESSED);
+    }
+
+    inline void set_pitch(ALfloat value) noexcept {
+      alSourcef(m_id, AL_PITCH, value);
+    }
+    inline void set_volume(ALfloat value) noexcept {
+      alSourcef(m_id, AL_GAIN, value);
+    }
+
+
+    inline auto operator==(al::source other) const noexcept -> bool {
+      return m_id != 0 && m_id == other.m_id;
+    }
+
+    inline explicit operator bool() const noexcept {
+      return m_id != 0;
+    }
+
+   private:
+    inline explicit source(ALuint id) noexcept : m_id{id} {}
+
+    ALuint m_id{};
+  };
+}    // namespace mkxp::al
 
 inline uint8_t formatSampleSize(int sdlFormat)
 {

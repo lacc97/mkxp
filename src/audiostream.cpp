@@ -28,11 +28,11 @@
 #include <SDL_thread.h>
 #include <SDL_timer.h>
 
-AudioStream::AudioStream(ALStream::LoopMode loopMode,
+AudioStream::AudioStream(bool looped,
                          const std::string &threadId)
 	: extPaused(false),
 	  noResumeStop(false),
-	  stream(loopMode, threadId)
+	  stream(looped)
 {
 	current.volume = 1.0f;
 	current.pitch = 1.0f;
@@ -85,14 +85,14 @@ void AudioStream::play(const std::string &filename,
 	float _volume = clamp<int>(volume, 0, 100) / 100.0f;
 	float _pitch  = clamp<int>(pitch, 50, 150) / 100.0f;
 
-	ALStream::State sState = stream.queryState();
+	mkxp::al::state sState = stream.query_state();
 
 	/* If all parameters match the current ones and we're
 	 * still playing, there's nothing to do */
 	if (filename == current.filename
 	&&  _volume  == current.volume
 	&&  _pitch   == current.pitch
-	&&  (sState == ALStream::Playing || sState == ALStream::Paused))
+	&&  (sState == mkxp::al::state::e_Playing || sState == mkxp::al::state::e_Paused))
 	{
 		unlockStream();
 		return;
@@ -102,7 +102,7 @@ void AudioStream::play(const std::string &filename,
 	 * we update the volume and continue streaming */
 	if (filename == current.filename
 	&&  _pitch   == current.pitch
-	&&  (sState == ALStream::Playing || sState == ALStream::Paused))
+	&&  (sState == mkxp::al::state::e_Playing || sState == mkxp::al::state::e_Paused))
 	{
 		setVolume(Base, _volume);
 		current.volume = _volume;
@@ -115,13 +115,13 @@ void AudioStream::play(const std::string &filename,
 
 	switch (sState)
 	{
-	case ALStream::Paused :
-	case ALStream::Playing :
+	case mkxp::al::state::e_Paused :
+	case mkxp::al::state::e_Playing :
 		stream.stop();
-	case ALStream::Stopped :
+	case mkxp::al::state::e_Stopped :
 		if (diffFile)
 			stream.close();
-	case ALStream::Closed :
+	case mkxp::al::state::e_Closed :
 		if (diffFile)
 		{
 			try
@@ -141,7 +141,7 @@ void AudioStream::play(const std::string &filename,
 	}
 
 	setVolume(Base, _volume);
-	stream.setPitch(_pitch);
+	stream.set_pitch(_pitch);
 
 	if (offset > 0)
 	{
@@ -178,7 +178,7 @@ void AudioStream::fadeOut(int duration)
 {
 	lockStream();
 
-	ALStream::State sState = stream.queryState();
+	mkxp::al::state sState = stream.query_state();
 	noResumeStop = true;
 
 	if (fade.active)
@@ -188,7 +188,7 @@ void AudioStream::fadeOut(int duration)
 		return;
 	}
 
-	if (sState == ALStream::Paused)
+	if (sState == mkxp::al::state::e_Paused)
 	{
 		stream.stop();
 		unlockStream();
@@ -196,7 +196,7 @@ void AudioStream::fadeOut(int duration)
 		return;
 	}
 
-	if (sState != ALStream::Playing)
+	if (sState != mkxp::al::state::e_Playing)
 	{
 		unlockStream();
 
@@ -248,7 +248,7 @@ float AudioStream::getVolume(VolumeType type)
 
 float AudioStream::playingOffset()
 {
-	return stream.queryOffset();
+	return stream.get_offset();
 }
 
 void AudioStream::updateVolume()
@@ -258,7 +258,7 @@ void AudioStream::updateVolume()
 	for (size_t i = 0; i < VolumeTypeCount; ++i)
 		vol *= volumes[i];
 
-	stream.setVolume(vol);
+	stream.set_volume(vol);
 }
 
 void AudioStream::finiFadeOutInt()
@@ -304,13 +304,13 @@ void AudioStream::fadeOutThread()
 		uint32_t curDur = SDL_GetTicks() - fade.startTicks;
 		float resVol = 1.0f - (curDur*fade.msStep);
 
-		ALStream::State state = stream.queryState();
+		mkxp::al::state state = stream.query_state();
 
-		if (state != ALStream::Playing
+		if (state != mkxp::al::state::e_Playing
 		|| resVol < 0
 		|| fade.reqFini)
 		{
-			if (state != ALStream::Paused)
+			if (state != mkxp::al::state::e_Paused)
 				stream.stop();
 
 			setVolume(FadeOut, 1.0f);
@@ -342,9 +342,9 @@ void AudioStream::fadeInThread()
 		uint32_t cur = SDL_GetTicks() - fadeIn.startTicks;
 		float prog = cur / 1000.0f;
 
-		ALStream::State state = stream.queryState();
+    mkxp::al::state state = stream.query_state();
 
-		if (state != ALStream::Playing
+		if (state != mkxp::al::state::e_Playing
 		||  prog >= 1.0f
 		||  fadeIn.rqFini)
 		{

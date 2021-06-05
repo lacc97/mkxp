@@ -9,3 +9,9 @@
 [submodule "lib/win32api"]
 	path = lib/win32api
 	url = https://github.com/lacc97/mkxp-win32
+[submodule "lib/cppcoro"]
+	path = lib/cppcoro
+	url = https://github.com/andreasbuhr/cppcoro.git
+[submodule "lib/atomic_queue"]
+	path = lib/atomic_queue
+	url = https://github.com/max0x7ba/atomic_queue.git
