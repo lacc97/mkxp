@@ -158,6 +158,8 @@ void mkxp::al::stream::play(float offset) {
 
     case state::e_Stopped:
       coro::make_oneshot(start_stream(offset));
+      break;
+
     case state::e_Paused:
       cppcoro::sync_wait(resume_stream());
       break;
@@ -218,6 +220,7 @@ auto mkxp::al::stream::start_stream(float offset) noexcept -> cppcoro::task<> {
     }
   }
 
+  m_source.play();
   mp_data->state = state::e_Paused;
 
   co_await loop_stream();
@@ -235,6 +238,15 @@ auto unqueue_buffer(mkxp::al::source source, std::weak_ptr<T> w_sentinel) -> cpp
       /* suspend forever, but we should eventually get deleted from main thread */
       co_await std::suspend_always{};
     }
+  } while(true);
+}
+
+auto wait_until_source_stops(mkxp::al::source source) -> cppcoro::task<> {
+  do {
+    if(source.get_state() == AL_STOPPED)
+      co_return;
+    else
+      co_await mkxp::audio_thread::schedule_after(std::chrono::milliseconds{8});
   } while(true);
 }
 
@@ -268,7 +280,7 @@ auto mkxp::al::stream::loop_stream() noexcept -> cppcoro::task<> {
 
     auto status = mp_data_source->fillBuffer(buf);
     if(status == ALDataSource::Error)
-      co_return;
+      break;
 
     m_source.queue_buffer(buf);
 
@@ -283,7 +295,13 @@ auto mkxp::al::stream::loop_stream() noexcept -> cppcoro::task<> {
      * sample count once it gets unqueued */
     if(status == ALDataSource::WrapAround)
       last_buffer = buf;
+    else if(status == ALDataSource::EndOfStream) {
+      co_await wait_until_source_stops(m_source);
+      break;
+    }
   }
+
+  co_await stop_stream();
 }
 
 auto mkxp::al::stream::resume_stream() noexcept -> cppcoro::task<> {
