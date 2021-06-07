@@ -332,7 +332,7 @@ void Audio::reset()
 	p->bgm.stop();
 	p->bgs.stop();
 	p->me.stop();
-	p->se.stop();
+	cppcoro::sync_wait(p->se.stop());
 }
 
 Audio::~Audio() { delete p; }
