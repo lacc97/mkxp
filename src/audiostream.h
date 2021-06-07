@@ -26,7 +26,39 @@
 #include "alstream.h"
 #include "sdl-util.h"
 
+#include "coro_utils.h"
+
 #include <string>
+
+namespace mkxp {
+  class audio_stream {
+    struct fade_state {
+      /* Amount of reduced absolute volume
+		 * per ms of fade time */
+      float ms_step;
+
+      /* Ticks at start of fade */
+      uint32_t start_ticks;
+
+      coro::async_task<coro::worker_thread> task;
+    };
+
+   private:
+    struct {
+      bool ext_paused : 1;
+      bool no_resume_stop : 1;
+    } m_flags;
+    struct {
+      std::string filename;
+      float volume;
+      float pitch;
+    } m_current;
+
+    al::stream m_stream;
+
+    fade_state m_fade_in, m_fade_out;
+  };
+}
 
 struct AudioStream
 {

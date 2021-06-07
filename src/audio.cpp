@@ -21,6 +21,8 @@
 
 #include "audio.h"
 
+#include <cppcoro/sync_wait.hpp>
+
 #include "audiostream.h"
 #include "soundemitter.h"
 #include "sharedstate.h"
@@ -39,7 +41,7 @@ struct AudioPrivate
 	AudioStream bgs;
 	AudioStream me;
 
-	SoundEmitter se;
+	mkxp::sound_emitter se;
 
 	SyncPoint &syncPoint;
 
@@ -302,12 +304,12 @@ void Audio::sePlay(const char *filename,
                    int volume,
                    int pitch)
 {
-	p->se.play(filename, volume, pitch);
+	cppcoro::sync_wait(p->se.play(filename, volume, pitch));
 }
 
 void Audio::seStop()
 {
-	p->se.stop();
+	cppcoro::sync_wait(p->se.stop());
 }
 
 void Audio::setupMidi()

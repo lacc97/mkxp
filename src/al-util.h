@@ -216,6 +216,11 @@ namespace mkxp::al {
       m_id = 0;
     }
 
+    inline void upload_data(ALenum format, const ALvoid *data, ALsizei size, ALsizei freq)
+    {
+      alBufferData(m_id, format, data, size, freq);
+    }
+
     inline auto get_integer(ALenum prop) const noexcept -> ALint {
       ALint value;
       alGetBufferi(m_id, prop, &value);
