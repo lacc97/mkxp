@@ -22,8 +22,9 @@
 #ifndef BOOSTHASH_H
 #define BOOSTHASH_H
 
-#include <unordered_map>
-#include <unordered_set>
+#include <robin_hood.h>
+
+#include <string_view>
 
 #include <utility>
 
@@ -56,16 +57,26 @@ template<typename K, typename V>
 class BoostHash
 {
 private:
-	typedef std::unordered_map<K, V> BoostType;
-	typedef std::pair<K, V> PairType;
+  struct string_hash
+  {
+    using hash_type = robin_hood::hash<std::string_view>;
+    using is_transparent = void;
+
+    size_t operator()(const char* str) const        { return hash_type{}(std::string_view{str}); }
+    size_t operator()(std::string_view str) const   { return hash_type{}(std::string_view{str}); }
+    size_t operator()(std::string const& str) const { return hash_type{}(std::string_view{str}); }
+  };
+
+  typedef robin_hood::unordered_node_map<K, V, std::conditional_t<std::is_same_v<K, std::string>, string_hash, robin_hood::hash<K>>, std::equal_to<>> BoostType;
+	typedef typename BoostType::value_type PairType;
 	BoostType p;
 
 public:
 	typedef typename BoostType::const_iterator const_iterator;
 
-	inline bool contains(const K &key) const
-	{
-		const_iterator iter = p.find(key);
+ template <typename Key>
+ inline bool contains(const Key& key) const {
+   const_iterator iter = p.find(key);
 
 		return (iter != p.cend());
 	}
@@ -80,8 +91,8 @@ public:
 		p.erase(key);
 	}
 
-	inline const V value(const K &key) const
-	{
+  template <typename Key>
+  inline V value(const Key& key) const {
 		const_iterator iter = p.find(key);
 
 		if (iter == p.cend())
@@ -90,8 +101,8 @@ public:
 		return iter->second;
 	}
 
-	inline const V value(const K &key, const V &defaultValue) const
-	{
+  template <typename Key>
+  inline V value(const Key& key, const V& defaultValue) const {
 		const_iterator iter = p.find(key);
 
 		if (iter == p.cend())
@@ -100,12 +111,19 @@ public:
 		return iter->second;
 	}
 
-	inline V &operator[](const K &key)
-	{
-		return p[key];
-	}
+  template <typename Key>
+  inline V& operator[](Key const& key) {
+    if(auto it = p.find(key); it != p.end()) {
+      return it->second;
+    } else {
+      if constexpr(std::is_same_v<Key, K>)
+        return p.try_emplace(key).first->second;
+      else
+        return p.try_emplace(K{key}).first->second;
+    }
+  }
 
-	inline const_iterator cbegin() const
+  inline const_iterator cbegin() const
 	{
 		return p.cbegin();
 	}
@@ -119,14 +137,25 @@ public:
 template<typename K>
 class BoostSet
 {
+  struct string_hash
+  {
+    using hash_type = robin_hood::hash<std::string_view>;
+    using is_transparent = void;
+
+    size_t operator()(const char* str) const        { return hash_type{}(std::string_view{str}); }
+    size_t operator()(std::string_view str) const   { return hash_type{}(std::string_view{str}); }
+    size_t operator()(std::string const& str) const { return hash_type{}(std::string_view{str}); }
+  };
+
 private:
-	typedef std::unordered_set<K> BoostType;
+	typedef robin_hood::unordered_node_set<K, std::conditional_t<std::is_same_v<K, std::string>, string_hash, robin_hood::hash<K>>, std::equal_to<>> BoostType;
 	BoostType p;
 
 public:
 	typedef typename BoostType::const_iterator const_iterator;
 
-	inline bool contains(const K &key)
+  template <typename Key>
+	inline bool contains(const Key& key)
 	{
 		const_iterator iter = p.find(key);
 
