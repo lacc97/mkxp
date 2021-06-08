@@ -236,9 +236,7 @@ auto unqueue_buffer(const cppcoro::cancellation_token& token, mkxp::al::source s
       else
         co_await mkxp::audio_thread::schedule_after(std::chrono::milliseconds{8});
     } else {
-      /* suspend forever, but we should eventually get deleted from main thread */
-      /* TODO: maybe throw instead? */
-      co_await std::suspend_always{};
+      co_return mkxp::al::buffer{};
     }
   } while(true);
 }
@@ -257,11 +255,15 @@ auto mkxp::al::stream::loop_stream(cppcoro::cancellation_token token) noexcept -
 
   auto last_buffer = al::buffer{};
   while(true) {
-    auto buf = co_await unqueue_buffer(token, m_source);
+    // TODO pass secondary sync
 
-    /* If something went wrong, try again later */
-    if(!buf)
-      continue;
+    auto buf = co_await unqueue_buffer(token, m_source);
+    if(!buf) {
+      if(token.is_cancellation_requested())
+        break;
+      else
+        continue;
+    }
 
     if(last_buffer) {
       m_processed_frames = mp_data_source->loopStartFrames();
@@ -301,7 +303,8 @@ auto mkxp::al::stream::loop_stream(cppcoro::cancellation_token token) noexcept -
     }
   }
 
-  co_await stop_stream();
+  if(auto state = query_state(); state == state::e_Playing || state == state::e_Paused)
+    co_await stop_stream();
 }
 
 auto mkxp::al::stream::resume_stream() noexcept -> cppcoro::task<> {
