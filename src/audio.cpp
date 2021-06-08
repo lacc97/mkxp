@@ -24,6 +24,8 @@
 #include <cppcoro/sync_wait.hpp>
 
 #include "audiostream.h"
+#include "audio_thread.h"
+#include "coro_utils.h"
 #include "soundemitter.h"
 #include "sharedstate.h"
 #include "sharedmidistate.h"
@@ -58,12 +60,7 @@ struct AudioPrivate
 		BgmFadingIn
 	};
 
-	struct
-	{
-		SDL_Thread *thread;
-		AtomicFlag termReq;
-		MeWatchState state;
-	} meWatch;
+  cppcoro::cancellation_source m_me_watch_cancellation;
 
 	AudioPrivate(RGSSThreadData &rtData)
 	    : bgm(true, "bgm"),
@@ -72,171 +69,82 @@ struct AudioPrivate
 	      se(rtData.config),
 	      syncPoint(rtData.syncPoint)
 	{
-		meWatch.state = MeNotPlaying;
-		meWatch.thread = createSDLThread
-			<AudioPrivate, &AudioPrivate::meWatchFun>(this, "audio_mewatch");
 	}
 
-	~AudioPrivate()
-	{
-		meWatch.termReq.set();
-		SDL_WaitThread(meWatch.thread, 0);
-	}
+  inline static constexpr float k_fade_out_step = 1.f/(200.f/AUDIO_SLEEP);
+  inline static constexpr float k_fade_in_step = 1.f/(1000.f/AUDIO_SLEEP);
 
-	void meWatchFun()
-	{
-		const float fadeOutStep = 1.f / (200  / AUDIO_SLEEP);
-		const float fadeInStep  = 1.f / (1000 / AUDIO_SLEEP);
+  auto play_me(cppcoro::cancellation_token token, const char *filename, int volume, int pitch) -> cppcoro::task<> {
+    co_await mkxp::audio_thread::schedule();
 
-		while (true)
-		{
-			syncPoint.passSecondarySync();
+    me.play(filename, volume, pitch);
 
-			if (meWatch.termReq)
-				return;
+    bgm.extPaused = true;
 
-			switch (meWatch.state)
-			{
-			case MeNotPlaying:
-			{
-				me.lockStream();
+    /* bgm fading out */
+    float vol = bgm.getVolume(AudioStream::External) - k_fade_out_step;
+    while(vol > 0 && bgm.stream.query_state() != mkxp::al::state::e_Playing) {
+      bgm.setVolume(AudioStream::External, vol);
 
-				if (me.stream.query_state() == mkxp::al::state::e_Playing)
-				{
-					/* ME playing detected. -> FadeOutBGM */
-					bgm.extPaused = true;
-					meWatch.state = BgmFadingOut;
-				}
+      co_await mkxp::audio_thread::schedule_after(std::chrono::milliseconds{AUDIO_SLEEP});
+      if(token.is_cancellation_requested())
+        co_return;
 
-				me.unlockStream();
+      vol = bgm.getVolume(AudioStream::External) - k_fade_out_step;
+    }
 
-				break;
-			}
+    bgm.setVolume(AudioStream::External, 0);
+    bgm.stream.pause();
+  }
 
-			case BgmFadingOut :
-			{
-				me.lockStream();
+  auto stop_me(cppcoro::cancellation_token token) -> cppcoro::task<> {
+    co_await mkxp::audio_thread::schedule();
 
-				if (me.stream.query_state() != mkxp::al::state::e_Playing)
-				{
-					/* ME has ended while fading OUT BGM. -> FadeInBGM */
-					me.unlockStream();
-					meWatch.state = BgmFadingIn;
+    me.stop();
 
-					break;
-				}
+    bgm.extPaused = false;
 
-				bgm.lockStream();
+    if(bgm.stream.query_state() == mkxp::al::state::e_Paused) {
+      /* fade in bgm */
+      bgm.stream.play();
 
-				float vol = bgm.getVolume(AudioStream::External);
-				vol -= fadeOutStep;
+      float vol = bgm.getVolume(AudioStream::External) + k_fade_in_step;
+      while(vol < 1) {
+        if(bgm.stream.query_state() == mkxp::al::state::e_Stopped)
+          break;
 
-				if (vol < 0 || bgm.stream.query_state() != mkxp::al::state::e_Playing)
-				{
-					/* Either BGM has fully faded out, or stopped midway. -> MePlaying */
-					bgm.setVolume(AudioStream::External, 0);
-					bgm.stream.pause();
-					meWatch.state = MePlaying;
-					bgm.unlockStream();
-					me.unlockStream();
+        bgm.setVolume(AudioStream::External, vol);
 
-					break;
-				}
+        co_await mkxp::audio_thread::schedule_after(std::chrono::milliseconds{AUDIO_SLEEP});
+        if(token.is_cancellation_requested())
+          co_return;
 
-				bgm.setVolume(AudioStream::External, vol);
-				bgm.unlockStream();
-				me.unlockStream();
+        vol = bgm.getVolume(AudioStream::External) + k_fade_in_step;
+      }
 
-				break;
-			}
+      bgm.setVolume(AudioStream::External, 1.0f);
+    } else if(bgm.stream.query_state() == mkxp::al::state::e_Stopped) {
+      /* bgm is stopped */
+      bgm.setVolume(AudioStream::External, 1.0f);
 
-			case MePlaying :
-			{
-				me.lockStream();
+      if(!bgm.noResumeStop)
+        bgm.stream.play();
+    }
+  }
 
-				if (me.stream.query_state() != mkxp::al::state::e_Playing)
-				{
-					/* ME has ended */
-					bgm.lockStream();
+  auto fade_me(cppcoro::cancellation_token token, int time) -> cppcoro::task<> {
+    co_await mkxp::audio_thread::schedule();
 
-					bgm.extPaused = false;
+    me.fadeOut(time);
 
-          mkxp::al::state sState = bgm.stream.query_state();
+    while(me.stream.query_state() != mkxp::al::state::e_Stopped) {
+      co_await mkxp::audio_thread::schedule_after(std::chrono::milliseconds{AUDIO_SLEEP});
+      if(token.is_cancellation_requested())
+        co_return;
+    }
 
-					if (sState == mkxp::al::state::e_Paused)
-					{
-						/* BGM is paused. -> FadeInBGM */
-						bgm.stream.play();
-						meWatch.state = BgmFadingIn;
-					}
-					else
-					{
-						/* BGM is stopped. -> MeNotPlaying */
-						bgm.setVolume(AudioStream::External, 1.0f);
-
-						if (!bgm.noResumeStop)
-							bgm.stream.play();
-
-						meWatch.state = MeNotPlaying;
-					}
-
-					bgm.unlockStream();
-				}
-
-				me.unlockStream();
-
-				break;
-			}
-
-			case BgmFadingIn :
-			{
-				bgm.lockStream();
-
-				if (bgm.stream.query_state() == mkxp::al::state::e_Stopped)
-				{
-					/* BGM stopped midway fade in. -> MeNotPlaying */
-					bgm.setVolume(AudioStream::External, 1.0f);
-					meWatch.state = MeNotPlaying;
-					bgm.unlockStream();
-
-					break;
-				}
-
-				me.lockStream();
-
-				if (me.stream.query_state() == mkxp::al::state::e_Playing)
-				{
-					/* ME started playing midway BGM fade in. -> FadeOutBGM */
-					bgm.extPaused = true;
-					meWatch.state = BgmFadingOut;
-					me.unlockStream();
-					bgm.unlockStream();
-
-					break;
-				}
-
-				float vol = bgm.getVolume(AudioStream::External);
-				vol += fadeInStep;
-
-				if (vol >= 1)
-				{
-					/* BGM fully faded in. -> MeNotPlaying */
-					vol = 1.0f;
-					meWatch.state = MeNotPlaying;
-				}
-
-				bgm.setVolume(AudioStream::External, vol);
-
-				me.unlockStream();
-				bgm.unlockStream();
-
-				break;
-			}
-			}
-
-			SDL_Delay(AUDIO_SLEEP);
-		}
-	}
+    co_await stop_me(token);
+  }
 };
 
 Audio::Audio(RGSSThreadData &rtData)
@@ -286,17 +194,29 @@ void Audio::mePlay(const char *filename,
                    int volume,
                    int pitch)
 {
-	p->me.play(filename, volume, pitch);
+  p->m_me_watch_cancellation.request_cancellation();
+  p->m_me_watch_cancellation = {};
+  mkxp::coro::make_oneshot(p->play_me(p->m_me_watch_cancellation.token(), filename, volume, pitch));
+
+//  p->me.play(filename, volume, pitch);
 }
 
 void Audio::meStop()
 {
-	p->me.stop();
+  p->m_me_watch_cancellation.request_cancellation();
+  p->m_me_watch_cancellation = {};
+	mkxp::coro::make_oneshot(p->stop_me(p->m_me_watch_cancellation.token()));
+
+//  p->me.stop();
 }
 
 void Audio::meFade(int time)
 {
-	p->me.fadeOut(time);
+  p->m_me_watch_cancellation.request_cancellation();
+  p->m_me_watch_cancellation = {};
+  mkxp::coro::make_oneshot(p->fade_me(p->m_me_watch_cancellation.token(), time));
+
+//  p->me.fadeOut(time);
 }
 
 
