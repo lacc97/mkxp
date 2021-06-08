@@ -25,6 +25,8 @@
 #include <array>
 #include <memory>
 
+#include <cppcoro/cancellation_source.hpp>
+#include <cppcoro/cancellation_token.hpp>
 #include <cppcoro/task.hpp>
 
 #include "al-util.h"
@@ -62,10 +64,8 @@ namespace mkxp::al {
     auto query_state() const noexcept -> state {
       if(!mp_data_source)
         return state::e_Closed;
-      if(!mp_data)
-        return state::e_Stopped;
 
-      return mp_data->state;
+      return m_state;
     }
 
     auto get_offset() const -> float;
@@ -77,7 +77,7 @@ namespace mkxp::al {
     void close_source();
 
     auto start_stream(float offset) noexcept -> cppcoro::task<>;
-    auto loop_stream() noexcept -> cppcoro::task<>;
+    auto loop_stream(cppcoro::cancellation_token cancellation) noexcept -> cppcoro::task<>;
     auto pause_stream() noexcept -> cppcoro::task<>;
     auto resume_stream() noexcept -> cppcoro::task<>;
     auto stop_stream() noexcept -> cppcoro::task<>;
@@ -87,8 +87,10 @@ namespace mkxp::al {
     al::source m_source;
     std::array<al::buffer, 3> m_buffers;
 
+    std::atomic<state> m_state{state::e_Closed};
     std::unique_ptr<ALDataSource> mp_data_source;
-    std::shared_ptr<data> mp_data;
+    std::atomic_uint64_t m_processed_frames;
+    cppcoro::cancellation_source m_cancellation_source;
   };
 }
 
