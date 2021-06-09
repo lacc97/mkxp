@@ -1,4 +1,5 @@
 set(BUILD_SHARED_LIBS OFF)
+set(BUILD_TESTING OFF)
 
 add_library(atomic_queue INTERFACE)
   target_include_directories(atomic_queue
